@@ -195,7 +195,7 @@ namespace NAnt.Core.Tasks {
 
             if (owningTarget != null) {
                 // topologically sorted list of targets that will be executed
-                TargetCollection targets = Project.TopologicalTargetSort(TargetName, Project.Targets);
+                TargetCollection targets = Project.TopologicalTargetSort(TargetName);
 
                 // check if owning target is part of list of targets that will
                 // be executed again

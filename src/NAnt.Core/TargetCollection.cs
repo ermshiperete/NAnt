@@ -27,22 +27,36 @@ namespace NAnt.Core {
     [Serializable()]
     public class TargetCollection : ArrayList {
         private static readonly log4net.ILog logger = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
-        public virtual int Add(Target t){
-            // throw an exception if an attempt is made to add a null target
-            if (t == null) {
-                throw new BuildException("Null Target!");
-            }
 
-            logger.Debug(string.Format(
+		public TargetCollection()
+		{
+		}
+
+		public TargetCollection(ICollection c): base(c)
+		{
+		}
+
+		public virtual int Add(Target t)
+		{
+// throw an exception if an attempt is made to add a null target
+			if (t == null)
+			{
+				throw new BuildException("Null Target!");
+			}
+
+			logger.Debug(string.Format(
                 CultureInfo.InvariantCulture,
                 ResourceUtils.GetString("String_AddingTarget"), 
                 t.Name));
             
-            // check for existing target with same name.
-            if (Find(t.Name) == null) {
-                return base.Add(t);
-            } else {
-                throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
+// check for existing target with same name.
+			if (Find(t.Name) == null)
+			{
+				return base.Add(t);
+			}
+			else
+			{
+				throw new BuildException(string.Format(CultureInfo.InvariantCulture,
                     ResourceUtils.GetString("NA1073"), t.Name));
             }
         }
@@ -73,15 +87,18 @@ namespace NAnt.Core {
         /// targets in the <see cref="TargetCollection" />, separated by
         /// the specified <paramref name="separator" />.
         /// </returns>
-        public string ToString(string separator) {
-            string[] targetNames = new string[Count];
+        public string ToString(string separator)
+		{
+			string[] targetNames = new string[Count];
 
-            for (int i = 0; i < Count; i++) {
-                targetNames[i] = ((Target) this[i]).Name;
-            }
+			for (int i = 0; i < Count; i++)
+			{
+				targetNames [i] = string.Format("{0} ({1})", ((Target)this [i]).Name, 
+					((Target)this [i]).UseCount);
+			}
 
-            return string.Join(separator, targetNames);
-        }
+			return string.Join(separator, targetNames);
+		}
 
         public override int Add(object value) {
             // call typed version above.
@@ -104,4 +121,20 @@ namespace NAnt.Core {
 
         #endregion Override implementation of Object
     }
+
+	public class TargetCollectionComparer: IComparer
+	{
+		public int Compare(object x, object y)
+		{
+			Target tX = x as Target;
+			Target tY = y as Target;
+			
+			if (tX == null)
+				return 1;
+			if (tY == null)
+				return -1;
+
+			return tX.UseCount.CompareTo(tY.UseCount);
+		}
+	}
 }

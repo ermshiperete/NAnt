@@ -101,22 +101,46 @@ namespace NAnt.Core {
 
         #region Public Instance Methods
 
+		private static AppDomain TaskAppDomain { get; set; }
+		private static object _sync = new object();
+
         [ReflectionPermission(SecurityAction.Demand, Flags=ReflectionPermissionFlag.NoFlags)]
-        public Task CreateTask() {
-            Task task = (Task) Assembly.CreateInstance(
+        public Task CreateTask()
+		{
+			if (TaskName == "nant" || TaskName == "nantex") // HACK
+			{
+				lock (_sync)
+				{
+					Console.WriteLine("Creating {0] on new appdomain", TaskName);
+					// create task in new AppDomain
+					if (TaskAppDomain == null)
+					{
+						Console.WriteLine("new appdomain doesn't exist, creating one");
+						// Construct and initialize settings for a second AppDomain
+						AppDomainSetup ads = new AppDomainSetup();
+						ads.ApplicationBase = Environment.CurrentDirectory;
+						ads.DisallowBindingRedirects = false;
+						ads.DisallowCodeDownload = true;
+						ads.ConfigurationFile = 
+							AppDomain.CurrentDomain.SetupInformation.ConfigurationFile;
+					}
+				}
+			}
+			Task task = (Task)Assembly.CreateInstance(
                 ClassName, 
                 true, 
-                BindingFlags.Public | BindingFlags.Instance,
-                null,
-                null,
-                CultureInfo.InvariantCulture,
+                BindingFlags.Public | BindingFlags.Instance, 
+                null, 
+                null, 
+                CultureInfo.InvariantCulture, 
                 null);
-            IPluginConsumer pluginConsumer = task as IPluginConsumer;
-            if (pluginConsumer != null) {
-                TypeFactory.PluginScanner.RegisterPlugins(pluginConsumer);
-            }
-            return task;
-        }
+			IPluginConsumer pluginConsumer = task as IPluginConsumer;
+			if (pluginConsumer != null)
+			{
+				TypeFactory.PluginScanner.RegisterPlugins(pluginConsumer);
+			}
+			return task;
+		}
 
         #endregion Public Instance Methods
 

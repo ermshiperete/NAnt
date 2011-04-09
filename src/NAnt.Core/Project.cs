@@ -21,9 +21,10 @@
 // William E. Caputo (wecaputo@thoughtworks.com | logosity@yahoo.com)
 
 using System;
-using System.Collections;
-using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Collections;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Configuration;
 using System.Globalization;
 using System.IO;
@@ -35,6 +36,7 @@ using Microsoft.Win32;
 
 using NAnt.Core.Tasks;
 using NAnt.Core.Util;
+using System.Threading;
 
 namespace NAnt.Core {
     /// <summary>
@@ -78,6 +80,11 @@ namespace NAnt.Core {
         private const string ProjectNameAttribute = "name";
         private const string ProjectDefaultAttribte = "default";
         private const string ProjectBaseDirAttribute = "basedir";
+        /// <summary>Attribute that specifies if build should be done multi-threaded or not.
+        /// Valid values are N (default), Y, or a number indicating the maximum number of
+        /// tasks to run in parallel.
+        /// </summary>
+        private const string ProjectUseMultiThreadingAttribute = "usemt";
         private const string TargetXml = "target";
         private const string WildTarget = "*";
 
@@ -136,8 +143,11 @@ namespace NAnt.Core {
         private TargetCollection _targets = new TargetCollection();
         private LocationMap _locationMap = new LocationMap();
         private PropertyDictionary _properties;
+        [ThreadStatic]
+        private static PropertyDictionary _localProperties;
         private PropertyDictionary _frameworkNeutralProperties;
-        private Target _currentTarget;
+        [ThreadStatic]
+        private static Target _currentTarget;
 
         // info about frameworks
         private FrameworkInfoDictionary _frameworks = new FrameworkInfoDictionary();
@@ -157,6 +167,21 @@ namespace NAnt.Core {
         /// Holds the default threshold for build loggers.
         /// </summary>
         private Level _threshold = Level.Info;
+
+        /// <summary><c>true</c> if the current thread is the controlling (main) thread</summary>
+        [ThreadStatic]
+        private static bool _isControlingThread;
+        /// <summary>
+        /// True if the project building file specifies that multi-threading can be used.
+        /// </summary>
+        private bool _multiThreadingEnabled;
+        /// <summary>
+        /// Maximum number of threads that can be used for building
+        /// </summary>
+        private int _maxNumberOfThreads = Environment.ProcessorCount;
+        public static object Synchronize = new object();
+        private Dictionary<string, TargetCollection> _sortedTargets = 
+            new Dictionary<string, TargetCollection>();
 
         #endregion Private Instance Fields
 
@@ -679,7 +704,11 @@ namespace NAnt.Core {
         /// </para>
         /// </remarks>
         public PropertyDictionary Properties {
-            get { return _properties; }
+            get { 
+                if (_localProperties != null)
+                    return _localProperties;
+                return _properties;
+            }
         }
 
         /// <summary>
@@ -848,7 +877,7 @@ namespace NAnt.Core {
                 TargetFinished(sender, e);
             }
         }
-        /// <summary>
+		/// <summary>
         /// Dispatches a <see cref="TaskStarted" /> event to the build listeners 
         /// for this <see cref="Project" />.
         /// </summary>
@@ -978,6 +1007,7 @@ namespace NAnt.Core {
                 //It just means we have all global tasks. -- skot
                 //throw new BuildException("No Target Specified");
             } else {
+                _isControlingThread = true;
                 foreach (string targetName in BuildTargets) {
                     //do not force dependencies of build targets.
                     Execute(targetName, false);
@@ -995,8 +1025,8 @@ namespace NAnt.Core {
         public void Execute(string targetName) {
             Execute(targetName, true);
         }
-        
-        /// <summary>
+
+		/// <summary>
         /// Executes a specific target.
         /// </summary>
         /// <param name="targetName">The name of the target to execute.</param>
@@ -1011,33 +1041,214 @@ namespace NAnt.Core {
             // sorting checks if all the targets (and dependencies)
             // exist, and if there is any cycle in the dependency
             // graph.
-            TargetCollection sortedTargets = TopologicalTargetSort(targetName, Targets);
-            int currentIndex = 0;
-            Target currentTarget;
-
-            // store calling target
+            TargetCollection sortedTargets = TopologicalTargetSort(targetName);
+            if (UseMultiThreading && sortedTargets.Count > 1) {
+                ExecuteMultiThreading(targetName, forceDependencies, sortedTargets);
+            } else {
+                ExecuteSingleThreading(targetName, forceDependencies, sortedTargets);
+            }
+        }
+        
+        private void ExecuteSingleThreading(string targetName, bool forceDependencies, TargetCollection sortedTargets) {
             Target callingTarget = _currentTarget;
+            for (; sortedTargets.Count > 0; ) {
+                sortedTargets.Sort(new TargetCollectionComparer());
+                Log(Level.Verbose, string.Format("sortedTargets.Count={0} ({1})", sortedTargets.Count, sortedTargets));
 
-            do {
-                // determine target that should be executed
-                currentTarget = (Target) sortedTargets[currentIndex++];
+                _currentTarget = sortedTargets[0] as Target;
+                //TargetCollection sortedTargetsCopy = new TargetCollection(sortedTargets);
+                sortedTargets.RemoveAt(0);
 
-                // store target that will be executed
-                _currentTarget = currentTarget;
-
-                // only execute targets that have not been executed already, if 
+                // only execute targets that have not been executed already, if
                 // we are not forcing.
-                if (forceDependencies || !currentTarget.Executed || currentTarget.Name == targetName) {
-                    currentTarget.Execute();
+                if (forceDependencies || !_currentTarget.Executed) {
+                    _currentTarget.Execute();
+                    _currentTarget.TargetProcessed();
                 }
-            } while (currentTarget.Name != targetName);
-
-            // restore calling target, as a <call> task might have caused the 
-            // current target to be executed and when finished executing this 
-            // target, the target that contained the <call> task should be 
+            }
+            // restore calling target, as a <call> task might have caused the
+            // current target to be executed and when finished executing this
+            // target, the target that contained the <call> task should be
             // considered the current target again
             _currentTarget = callingTarget;
         }
+
+        private void ExecuteMultiThreading(string targetName, bool forceDependencies, TargetCollection sortedTargets)
+		{
+			List<AutoResetEvent> runningTasks = new List<AutoResetEvent>();
+			List<BackgroundArgs> backgroundArgs = new List<BackgroundArgs>();
+
+			for (; sortedTargets.Count > 0;)
+			{
+				sortedTargets.Sort(new TargetCollectionComparer());
+				Log(Level.Verbose, string.Format("sortedTargets.Count={0} ({1})", sortedTargets.Count, sortedTargets));
+
+				for (; runningTasks.Count < NumberOfThreads && sortedTargets.Count > 0 &&
+					((Target)sortedTargets[0]).UseCount == 0;)
+				{
+					Target currentTarget = sortedTargets [0] as Target;
+					TargetCollection sortedTargetsCopy = new TargetCollection(sortedTargets);
+					sortedTargets.RemoveAt(0);
+
+					AutoResetEvent waitHandle = new AutoResetEvent(false);
+					runningTasks.Add(waitHandle);
+					BackgroundWorker worker = new BackgroundWorker();
+					worker.DoWork += OnExecuteBackgroundTask;
+					worker.RunWorkerCompleted += OnBackgroundTaskCompleted;
+					BackgroundArgs args = new BackgroundArgs(waitHandle, currentTarget.Name, forceDependencies, sortedTargetsCopy, Properties);
+					backgroundArgs.Add(args);
+					worker.RunWorkerAsync(args);
+				}
+
+				int iTask = WaitHandle.WaitAny(runningTasks.ToArray());
+				runningTasks.RemoveAt(iTask);
+
+				Log(Level.Verbose, string.Format("WaitHandle signaled finished thread: iTask={2}; runningTasks={0}, sortedTargets={1}", 
+					runningTasks.Count, sortedTargets.Count, iTask));
+				BackgroundArgs finishedTaskArgs = backgroundArgs [iTask];
+				backgroundArgs.RemoveAt(iTask);
+				if (finishedTaskArgs.Exception != null)
+					throw finishedTaskArgs.Exception;
+				else
+				if (finishedTaskArgs.Cancelled)
+					break;
+			}
+		}
+
+		private class BackgroundArgs {
+			public AutoResetEvent WaitHandle;
+			public string TargetName;
+			public bool ForceDependencies;
+			public TargetCollection SortedTargets;
+			public PropertyDictionary Properties;
+			public int BackgroundTaskId { get; set; }
+			public Exception Exception { get; set; }
+			public bool Cancelled { get; set; }
+
+			public BackgroundArgs(AutoResetEvent waitHandle, string targetName, bool forceDependencies,
+				TargetCollection sortedTargets, PropertyDictionary properties)
+			{
+				WaitHandle = waitHandle;
+				TargetName = targetName;
+				ForceDependencies = forceDependencies;
+				SortedTargets = sortedTargets;
+				Properties = new PropertyDictionary(properties);
+				BackgroundTaskId = -1;
+			}
+
+			public override string ToString()
+			{
+				return string.Format("[BackgroundArgs: BackgroundTaskId={0}, TargetName={1}, ForceDependencies={2}, Cancelled={3}, Exception={4}]",
+					BackgroundTaskId, TargetName, ForceDependencies, Cancelled,
+					Exception == null ? "<null>" : Exception.GetType().ToString());
+			}
+		}
+
+		private void OnExecuteBackgroundTask(object sender, DoWorkEventArgs e)
+		{
+			BackgroundWorker worker = sender as BackgroundWorker;
+			BackgroundArgs args = (BackgroundArgs)e.Argument;
+			try
+			{
+				args.BackgroundTaskId = Thread.CurrentThread.ManagedThreadId;
+
+				_localProperties = new PropertyDictionary(this);
+				_localProperties.Inherit(args.Properties, new StringCollection());
+
+				Execute(worker, args.TargetName, args.ForceDependencies, args.SortedTargets);
+				e.Result = args;
+
+				if (worker.CancellationPending)
+				{
+					e.Cancel = true;
+				}
+			}
+			catch (ApplicationException ex)
+			{
+				e.Result = args;
+				args.Exception = ex;
+				args.WaitHandle.Set();
+				throw;
+			}
+		}
+
+		private void OnBackgroundTaskCompleted(object sender, RunWorkerCompletedEventArgs e)
+		{
+			BackgroundArgs args = (BackgroundArgs)e.Result;
+
+			if (e.Cancelled)
+			{
+				// The user canceled the operation.
+				Console.WriteLine("{0}: Operation was canceled (thread: {1})", args.BackgroundTaskId, Thread.CurrentThread.ManagedThreadId);
+				args.Cancelled = true;
+			}
+			else
+			if (e.Error != null)
+			{
+				// There was an error during the operation.
+				string msg = String.Format("{1}: An error occurred: {0} (thread: {2})", e.Error.Message, args.BackgroundTaskId, Thread.CurrentThread.ManagedThreadId);
+				Console.WriteLine(msg);
+				args.Exception = e.Error;
+			}
+			else
+			{
+				// The operation completed normally.
+				string msg = String.Format("{1}> Result = {0} (thread: {2})", e.Result,
+					args.BackgroundTaskId, Thread.CurrentThread.ManagedThreadId);
+				Console.WriteLine(msg);
+			}
+
+			args.WaitHandle.Set();
+		}
+
+		/// <summary>
+		/// Executes a specific target.
+		/// </summary>
+		/// <param name="targetName">The name of the target to execute.</param>
+		/// <param name="forceDependencies">Whether dependencies should be forced to execute</param>
+		/// <remarks>
+		/// Global tasks are not executed.
+		/// </remarks>
+		private bool Execute(BackgroundWorker worker, string targetName, bool forceDependencies, TargetCollection sortedTargets)
+		{
+			// run everything from the beginning until we hit our targetName.
+			int currentIndex = 0;
+			Target currentTarget;
+
+			// store calling target
+			Target callingTarget = _currentTarget;
+
+			// do {
+			// determine target that should be executed
+			currentTarget = (Target)sortedTargets [currentIndex++];
+
+			Log(Level.Verbose, string.Format("Project.Execute(): start currentTarget={0}", currentTarget.Name));
+
+			// store target that will be executed
+			_currentTarget = currentTarget;
+
+			// only execute targets that have not been executed already, if 
+			// we are not forcing.
+			if (forceDependencies || !currentTarget.Executed || currentTarget.Name == targetName)
+			{
+				currentTarget.Execute();
+			}
+			//} while (currentTarget.Name != targetName);
+
+			Log(Level.Verbose, string.Format("Project.Execute(): end currentTarget={0}", currentTarget.Name));
+
+			lock (currentTarget)
+			{
+				currentTarget.TargetProcessed();
+			}
+
+			// restore calling target, as a <call> task might have caused the 
+			// current target to be executed and when finished executing this 
+			// target, the target that contained the <call> task should be 
+			// considered the current target again
+			_currentTarget = callingTarget;
+			return true;
+		}
 
         /// <summary>
         /// Executes the default target and wraps in error handling and time 
@@ -1376,6 +1587,16 @@ namespace NAnt.Core {
                 _defaultTargetName = doc.DocumentElement.GetAttribute(ProjectDefaultAttribte);
             }
 
+            if (doc.DocumentElement.HasAttribute(ProjectUseMultiThreadingAttribute)) {
+                string useMt = doc.DocumentElement.GetAttribute(ProjectUseMultiThreadingAttribute).ToLower();
+                if (useMt == "y" || useMt == "n" || useMt == "true" || useMt == "false") {
+                    _multiThreadingEnabled = (useMt == "y" || useMt == "true");
+                } else {
+                    _maxNumberOfThreads = Convert.ToInt32(useMt);
+                    _multiThreadingEnabled = true;
+                }
+            }
+            
             // give the project a meaningful base directory
             if (StringUtils.IsNullOrEmpty(newBaseDir)) {
                 if (!StringUtils.IsNullOrEmpty(BuildFileLocalName)) {
@@ -1596,33 +1817,47 @@ namespace NAnt.Core {
         /// A collection of <see cref="Target" /> instances in sorted order.
         /// </returns>
         /// <exception cref="BuildException">There is a cyclic dependecy among the targets, or a named target does not exist.</exception>
-        public TargetCollection TopologicalTargetSort(string root, TargetCollection targets) {
-            TargetCollection executeTargets = new TargetCollection();
-            Hashtable state = new Hashtable();
-            Stack visiting = new Stack();
+        public TargetCollection TopologicalTargetSort(string root)
+		{
+			if (_sortedTargets.ContainsKey(root))
+				return _sortedTargets [root];
 
-            // We first run a DFS based sort using the root as the starting node.
-            // This creates the minimum sequence of Targets to the root node.
-            // We then do a sort on any remaining unVISITED targets.
-            // This is unnecessary for doing our build, but it catches
-            // circular dependencies or missing Targets on the entire
-            // dependency tree, not just on the Targets that depend on the
-            // build Target.
-            TopologicalTargetSort(root, targets, state, visiting, executeTargets);
-            Log(Level.Debug, "Build sequence for target `" + root + "' is " + executeTargets);
-            foreach (Target target in targets) {
-                string st = (string) state[target.Name];
+			TargetCollection targets = Targets;
+			TargetCollection executeTargets = new TargetCollection();
+			Hashtable state = new Hashtable();
+			Stack visiting = new Stack();
 
-                if (st == null) {
-                    TopologicalTargetSort(target.Name, targets, state, visiting, executeTargets);
-                } else if (st == Project.Visiting) {
-                    throw new Exception("Unexpected node in visiting state: " + target.Name);
-                }
-            }
+			// We first run a DFS based sort using the root as the starting node.
+			// This creates the minimum sequence of Targets to the root node.
+			// We then do a sort on any remaining unVISITED targets.
+			// This is unnecessary for doing our build, but it catches
+			// circular dependencies or missing Targets on the entire
+			// dependency tree, not just on the Targets that depend on the
+			// build Target.
+			TopologicalTargetSort(root, null, targets, state, visiting, executeTargets, false);
+			executeTargets.Sort(new TargetCollectionComparer());
+			Log(Level.Debug, "Build sequence for target `" + root + "' is " + executeTargets);
+			var dummyExecuteTargets = new TargetCollection(executeTargets);
+			foreach (Target target in targets)
+			{
+				string st = (string)state [target.Name];
 
-            Log(Level.Debug, "Complete build sequence is " + executeTargets);
-            return executeTargets;
-        }
+				if (st == null)
+				{
+					TopologicalTargetSort(target.Name, null /* don't care */, targets, state, 
+						visiting, dummyExecuteTargets, true);
+				}
+				else
+				if (st == Project.Visiting)
+				{
+					throw new Exception("Unexpected node in visiting state: " + target.Name);
+				}
+			}
+
+			Log(Level.Debug, "Complete build sequence is " + dummyExecuteTargets);
+			_sortedTargets[root] = executeTargets;
+			return executeTargets;
+		}
 
         /// <summary>
         /// <para>
@@ -1655,93 +1890,145 @@ namespace NAnt.Core {
         /// </para>
         /// </summary>
         /// <param name="root">The current target to inspect. Must not be <see langword="null" />.</param>
+        /// <param name="parentTarget">The parent target.</param>
         /// <param name="targets">A collection of <see cref="Target" /> instances.</param>
         /// <param name="state">A mapping from targets to states The states in question are "VISITING" and "VISITED". Must not be <see langword="null" />.</param>
         /// <param name="visiting">A stack of targets which are currently being visited. Must not be <see langword="null" />.</param>
         /// <param name="executeTargets">The list to add target names to. This will end up containing the complete list of depenencies in dependency order. Must not be <see langword="null" />.</param>
+        /// <param name="fTesting"><c>true</c> if we're testing for missing targets or circular dependencies;
+        /// <c>false</c> to determine run order.</param>
         /// <exception cref="BuildException">
         ///   <para>A non-existent target is specified</para>
         ///   <para>-or-</para>
         ///   <para>A circular dependency is detected.</para>
         /// </exception>
-        private void TopologicalTargetSort(string root, TargetCollection targets, Hashtable state, Stack visiting, TargetCollection executeTargets) {
-            state[root] = Project.Visiting;
-            visiting.Push(root);
+        private void TopologicalTargetSort(string root, Target parentTarget, TargetCollection targets, 
+			Hashtable state, Stack visiting, TargetCollection executeTargets, bool fTesting)
+		{
+			state [root] = Project.Visiting;
+			visiting.Push(root);
 
-            Target target = (Target) targets.Find(root);
-            if (target == null) {
-                // check if there's a wildcard target defined
-                target = (Target) targets.Find(WildTarget);
-                if (target != null) {
-                    // if a wildcard target exists, then treat the wildcard
-                    // target as the requested target
-                    target = target.Clone();
-                    target.Name = root;
-                } else {
-                    StringBuilder sb = new StringBuilder("Target '");
-                    sb.Append(root);
-                    sb.Append("' does not exist in this project.");
+			Target target = (Target)targets.Find(root);
+			if (target == null)
+			{
+				// check if there's a wildcard target defined
+				target = (Target)targets.Find(WildTarget);
+				if (target != null)
+				{
+					// if a wildcard target exists, then treat the wildcard
+					// target as the requested target
+					target = target.Clone();
+					target.Name = root;
+				}
+				else
+				{
+					StringBuilder sb = new StringBuilder("Target '");
+					sb.Append(root);
+					sb.Append("' does not exist in this project.");
 
-                    visiting.Pop();
-                    if (visiting.Count > 0) {
-                        string parent = (string) visiting.Peek();
-                        sb.Append(" ");
-                        sb.Append("It is used from target '");
-                        sb.Append(parent);
-                        sb.Append("'.");
-                    }
+					visiting.Pop();
+					if (visiting.Count > 0)
+					{
+						string parent = (string)visiting.Peek();
+						sb.Append(" ");
+						sb.Append("It is used from target '");
+						sb.Append(parent);
+						sb.Append("'.");
+					}
 
-                    throw new BuildException(sb.ToString());
-                }
-            }
+					throw new BuildException(sb.ToString());
+				}
+			}
 
-            foreach (string dependency in target.Dependencies) {
-                string m = (string) state[dependency];
+			if (!fTesting)
+				target.AddParent(parentTarget);
 
-                if (m == null) {
-                    // Not been visited
-                    TopologicalTargetSort(dependency, targets, state, visiting, executeTargets);
-                } else if (m == Project.Visiting) {
-                    // Currently visiting this node, so have a cycle
-                    throw CreateCircularException(dependency, visiting);
-                }
-            }
+			foreach (string dependency in target.Dependencies)
+			{
+				string m = (string)state [dependency];
 
-            string p = (string) visiting.Pop();
+				if (m == null)
+				{
+					// Not been visited
+					TopologicalTargetSort(dependency, target, targets, state, visiting, executeTargets, fTesting);
+				}
+				else
+				if (m == Project.Visiting)
+				{
+					// Currently visiting this node, so have a cycle
+					throw CreateCircularException(dependency, visiting);
+				}
+				else
+				{
+					Target depTarget = (Target)targets.Find(dependency);
+					if (!fTesting)
+						depTarget.AddParent(target);
+				}
+			}
 
-            if (root != p) {
-                throw new Exception("Unexpected internal error: expected to pop " + root + " but got " + p);
-            }
+			string p = (string)visiting.Pop();
 
-            state[root] = Project.Visited;
-            executeTargets.Add(target);
-        }
+			if (root != p)
+			{
+				throw new Exception("Unexpected internal error: expected to pop " + root + " but got " + p);
+			}
 
-        /// <summary>
-        /// Builds an appropriate exception detailing a specified circular
-        /// dependency.
-        /// </summary>
-        /// <param name="end">The dependency to stop at. Must not be <see langword="null" />.</param>
-        /// <param name="stack">A stack of dependencies. Must not be <see langword="null" />.</param>
-        /// <returns>
-        /// A <see cref="BuildException" /> detailing the specified circular 
-        /// dependency.
-        /// </returns>
-        private static BuildException CreateCircularException(string end, Stack stack) {
-            StringBuilder sb = new StringBuilder("Circular dependency: ");
-            sb.Append(end);
+			state [root] = Project.Visited;
+			executeTargets.Add(target);
+		}
 
-            string c;
+		/// <summary>
+		/// Builds an appropriate exception detailing a specified circular
+		/// dependency.
+		/// </summary>
+		/// <param name="end">The dependency to stop at. Must not be <see langword="null" />.</param>
+		/// <param name="stack">A stack of dependencies. Must not be <see langword="null" />.</param>
+		/// <returns>
+		/// A <see cref="BuildException" /> detailing the specified circular 
+		/// dependency.
+		/// </returns>
+		private static BuildException CreateCircularException(string end, Stack stack)
+		{
+			StringBuilder sb = new StringBuilder("Circular dependency: ");
+			sb.Append(end);
 
-            do {
-                c = (string) stack.Pop();
-                sb.Append(" <- ");
-                sb.Append(c);
-            } while (!c.Equals(end));
+			string c;
 
-            return new BuildException(sb.ToString());
-        }
-    }
+			do
+			{
+				c = (string)stack.Pop();
+				sb.Append(" <- ");
+				sb.Append(c);
+			} while (!c.Equals(end));
+
+			return new BuildException(sb.ToString());
+		}
+
+		private bool UseMultiThreading
+		{
+			get { return _isControlingThread && _multiThreadingEnabled; }
+		}
+
+		private bool IsMultiThreadingEnabled
+		{
+			get { return _multiThreadingEnabled; }
+		}
+
+		private int NumberOfThreads
+		{
+			get { return _maxNumberOfThreads; }
+		}
+
+		public string ThreadLabel
+		{
+			get
+			{
+				if (IsMultiThreadingEnabled)
+					return string.Format("{0}> ", Thread.CurrentThread.ManagedThreadId);
+				return string.Empty;
+			}
+		}
+	}
 
     /// <summary>
     /// Allow the project construction to be optimized.

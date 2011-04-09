@@ -31,7 +31,6 @@ using System.Xml.Xsl;
 using System.Xml.XPath;
 
 using NUnit.Core;
-using TestCase = NUnit.Core.TestCase;
 using TestOutput = NUnit.Core.TestOutput;
 using NUnit.Framework;
 using NUnit.Util;
@@ -42,6 +41,7 @@ using NAnt.Core.Util;
 
 using NAnt.NUnit.Types;
 using NAnt.NUnit2.Types;
+using NUnit.Core.Filters;
 
 namespace NAnt.NUnit2.Tasks {
     /// <summary>
@@ -189,16 +189,16 @@ namespace NAnt.NUnit2.Tasks {
             EventListener listener = new EventCollector(logWriter, logWriter);
 
             foreach (NUnit2Test testElement in Tests) {
-                IFilter categoryFilter = null;
+                ITestFilter categoryFilter = null;
 
                 // include or exclude specific categories
                 string categories = testElement.Categories.Includes.ToString();
                 if (!StringUtils.IsNullOrEmpty(categories)) {
-                    categoryFilter = new CategoryFilter(categories.Split(','), false);
+                    categoryFilter = new CategoryFilter(categories.Split(','));
                 } else {
                     categories = testElement.Categories.Excludes.ToString();
                     if (!StringUtils.IsNullOrEmpty(categories)) {
-                        categoryFilter = new CategoryFilter(categories.Split(','), true);
+                        categoryFilter = new NotFilter(new CategoryFilter(categories.Split(',')));
                     }
                 }
 
@@ -378,7 +378,7 @@ namespace NAnt.NUnit2.Tasks {
         
         #endregion Private Instance Methods
 
-        private class EventCollector : LongLivingMarshalByRefObject, EventListener {
+        private class EventCollector : MarshalByRefObject, EventListener {
             private TextWriter outWriter;
             private TextWriter errorWriter;
             private string currentTestName;
@@ -398,18 +398,18 @@ namespace NAnt.NUnit2.Tasks {
             public void RunFinished(Exception exception) {
             }
 
-            public void TestFinished(TestCaseResult testResult) {
+            public void TestFinished(TestResult testResult) {
                 currentTestName = string.Empty;
             }
 
-            public void TestStarted(TestCase testCase) {
-                currentTestName = testCase.FullName;
-            }
+//            public void TestStarted(TestCase testCase) {
+//                currentTestName = testCase.FullName;
+//            }
 
             public void SuiteStarted(TestSuite suite) {
             }
 
-            public void SuiteFinished(TestSuiteResult suiteResult) {
+            public void SuiteFinished(TestResult suiteResult) {
             }
 
             public void UnhandledException( Exception exception ) {

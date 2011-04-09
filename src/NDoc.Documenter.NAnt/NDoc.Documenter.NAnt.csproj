@@ -1,169 +1,69 @@
-<VisualStudioProject>
-    <CSHARP
-        ProjectType = "Local"
-        ProductVersion = "7.0.9466"
-        SchemaVersion = "1.0"
-        ProjectGuid = "{841FAEBA-4527-410A-B765-E2EDA47ABDCE}"
-    >
-        <Build>
-            <Settings
-                ApplicationIcon = ""
-                AssemblyKeyContainerName = ""
-                AssemblyName = "NDoc.Documenter.NAnt"
-                AssemblyOriginatorKeyFile = ""
-                DefaultClientScript = "JScript"
-                DefaultHTMLPageLayout = "Grid"
-                DefaultTargetSchema = "IE50"
-                DelaySign = "false"
-                OutputType = "Library"
-                RootNamespace = "NDoc.Documenter.NAnt"
-                StartupObject = ""
-            >
-                <Config
-                    Name = "Debug"
-                    AllowUnsafeBlocks = "false"
-                    BaseAddress = "285212672"
-                    CheckForOverflowUnderflow = "false"
-                    ConfigurationOverrideFile = ""
-                    DefineConstants = "BuildWithVSNet"
-                    DocumentationFile = ""
-                    DebugSymbols = "true"
-                    FileAlignment = "4096"
-                    IncrementalBuild = "false"
-                    NoWarn = "0618"
-                    Optimize = "false"
-                    OutputPath = "..\..\build.VS.NET\NDoc.Documenter.NAnt\"
-                    RegisterForComInterop = "false"
-                    RemoveIntegerChecks = "false"
-                    TreatWarningsAsErrors = "true"
-                    WarningLevel = "4"
-                />
-                <Config
-                    Name = "Debug Main NAnt BuildFile"
-                    AllowUnsafeBlocks = "false"
-                    BaseAddress = "285212672"
-                    CheckForOverflowUnderflow = "false"
-                    ConfigurationOverrideFile = ""
-                    DefineConstants = ""
-                    DocumentationFile = ""
-                    DebugSymbols = "true"
-                    FileAlignment = "4096"
-                    IncrementalBuild = "false"
-                    NoWarn = "0618"
-                    Optimize = "false"
-                    OutputPath = "..\..\build.VS.NET\NDoc.Documenter.NAnt\"
-                    RegisterForComInterop = "false"
-                    RemoveIntegerChecks = "false"
-                    TreatWarningsAsErrors = "true"
-                    WarningLevel = "4"
-                />
-            </Settings>
-            <References>
-                <Reference
-                    Name = "mscorlib"
-                    AssemblyName = "mscorlib"
-                />
-                <Reference
-                    Name = "System"
-                    AssemblyName = "System"
-                />
-                <Reference
-                    Name = "System.XML"
-                    AssemblyName = "System.Xml"
-                />
-                <Reference
-                    Name = "NDoc.Core"
-                    AssemblyName = "NDoc.Core"
-                    HintPath = "..\..\lib\net\1.0\NDoc.Core.dll"
-                />
-                <Reference
-                    Name = "System.Drawing"
-                    AssemblyName = "System.Drawing"
-                    HintPath = "G:\WINDOWS\Microsoft.NET\Framework\v1.0.3705\System.Drawing.dll"
-                />
-                <Reference
-                    Name = "System.Windows.Forms"
-                    AssemblyName = "System.Windows.Forms"
-                    HintPath = "G:\WINDOWS\Microsoft.NET\Framework\v1.0.3705\System.Windows.Forms.dll"
-                />
-                <Reference
-                    Name = "NAnt.Core"
-                    Project = "{8F5F8375-4097-4952-B860-784EB9961ABE}"
-                    Package = "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"
-                />
-                <Reference
-                    Name = "System.Web"
-                    AssemblyName = "System.Web"
-                    HintPath = "C:\WINDOWS\Microsoft.NET\Framework\v1.1.4322\System.Web.dll"
-                />
-            </References>
-        </Build>
-        <Files>
-            <Include>
-                <File
-                    RelPath = "AssemblyInfo.cs"
-                    SubType = "Code"
-                    BuildAction = "Compile"
-                />
-                <File
-                    RelPath = "CommonAssemblyInfo.cs"
-                    Link = "..\CommonAssemblyInfo.cs"
-                    SubType = "Code"
-                    BuildAction = "Compile"
-                />
-                <File
-                    RelPath = "NAntDocumenter.cs"
-                    SubType = "Code"
-                    BuildAction = "Compile"
-                />
-                <File
-                    RelPath = "NAntDocumenterConfig.cs"
-                    SubType = "Code"
-                    BuildAction = "Compile"
-                />
-                <File
-                    RelPath = "NAntXsltUtilities.cs"
-                    SubType = "Code"
-                    BuildAction = "Compile"
-                />
-                <File
-                    RelPath = "Resources\common.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\filter-index.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\function-doc.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\function-index.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\nant-attributes.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\tags.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\task-index.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\type-doc.xslt"
-                    BuildAction = "Content"
-                />
-                <File
-                    RelPath = "Resources\type-index.xslt"
-                    BuildAction = "Content"
-                />
-            </Include>
-        </Files>
-    </CSHARP>
-</VisualStudioProject>
-
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="3.5">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>8.0.50727</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{8A7FFAC2-EF06-4F20-9C4F-5A35F89A6F3B}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>NDoc.Documenter.NAnt</RootNamespace>
+    <AssemblyName>NDoc.Documenter.NAnt</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\..\build.VS.NET\NDoc.Documenter.NAnt\</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <RunWithWarnings>false</RunWithWarnings>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug Main NAnt BuildFile|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\..\build.VS.NET\NDoc.Documenter.NAnt\</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <RunWithWarnings>false</RunWithWarnings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="..\CommonAssemblyInfo.cs" />
+    <Compile Include="NAntDocumenter.cs" />
+    <Compile Include="NAntDocumenterConfig.cs" />
+    <Compile Include="NAntXsltUtilities.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Resources\common.xslt" />
+    <Content Include="Resources\filter-index.xslt" />
+    <Content Include="Resources\function-doc.xslt" />
+    <Content Include="Resources\function-index.xslt" />
+    <Content Include="Resources\nant-attributes.xslt" />
+    <Content Include="Resources\tags.xslt" />
+    <Content Include="Resources\task-index.xslt" />
+    <Content Include="Resources\type-doc.xslt" />
+    <Content Include="Resources\type-index.xslt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web" />
+    <Reference Include="NDoc.Core, Version=1.3.3152.0, Culture=neutral, PublicKeyToken=b9896512f28c0f09">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\lib\common\neutral\NDoc.Core.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NAnt.Core\NAnt.Core.csproj">
+      <Project>{BBDD71F7-6E83-466B-B969-780FF751D8D1}</Project>
+      <Name>NAnt.Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+</Project>

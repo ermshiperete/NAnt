@@ -485,32 +485,32 @@ namespace NAnt.Core {
             BuildReport report = (BuildReport) _buildReports.Pop();
 
             if (error == null) {
-                OutputMessage(Level.Info, string.Empty, indentationLevel);
+                OutputMessage(e.Project, Level.Info, string.Empty, indentationLevel);
                 if (report.Errors == 0 && report.Warnings == 0) {
-                    OutputMessage(Level.Info, "BUILD SUCCEEDED", indentationLevel);
+                    OutputMessage(e.Project, Level.Info, "BUILD SUCCEEDED", indentationLevel);
                 } else {
-                    OutputMessage(Level.Info, string.Format(CultureInfo.InvariantCulture,
+                    OutputMessage(e.Project, Level.Info, string.Format(CultureInfo.InvariantCulture,
                         ResourceUtils.GetString("String_BuildSucceeded"), 
                         report.Errors, report.Warnings), indentationLevel);
                 }
-                OutputMessage(Level.Info, string.Empty, indentationLevel);
+                OutputMessage(e.Project, Level.Info, string.Empty, indentationLevel);
             } else {
-                OutputMessage(Level.Error, string.Empty, indentationLevel);
+                OutputMessage(e.Project, Level.Error, string.Empty, indentationLevel);
                 if (report.Errors == 0 && report.Warnings == 0) {
-                    OutputMessage(Level.Error, "BUILD FAILED", indentationLevel);
+                    OutputMessage(e.Project, Level.Error, "BUILD FAILED", indentationLevel);
                 } else {
-                    OutputMessage(Level.Info, string.Format(CultureInfo.InvariantCulture,
+                    OutputMessage(e.Project, Level.Info, string.Format(CultureInfo.InvariantCulture,
                         ResourceUtils.GetString("String_BuildFailed"), 
                         report.Errors, report.Warnings), indentationLevel);
                 }
-                OutputMessage(Level.Error, string.Empty, indentationLevel);
+                OutputMessage(e.Project, Level.Error, string.Empty, indentationLevel);
 
                 if (error is BuildException) {
                     if (Threshold <= Level.Verbose) {
-                        OutputMessage(Level.Error, error.ToString(), indentationLevel);
+                        OutputMessage(e.Project, Level.Error, error.ToString(), indentationLevel);
                     } else {
                         if (error.Message != null) {
-                            OutputMessage(Level.Error, error.Message, indentationLevel);
+                            OutputMessage(e.Project, Level.Error, error.Message, indentationLevel);
                         }
 
                         // output nested exceptions
@@ -519,24 +519,24 @@ namespace NAnt.Core {
                         int indentShift = 4; //e.Project.IndentationSize;
                         while (nestedException != null && !StringUtils.IsNullOrEmpty(nestedException.Message)) {
                             exceptionIndentationLevel += indentShift;
-                            OutputMessage(Level.Error, nestedException.Message, exceptionIndentationLevel);
+                            OutputMessage(e.Project, Level.Error, nestedException.Message, exceptionIndentationLevel);
                             nestedException = nestedException.InnerException;
                         }
                     }
                 } else {
-                    OutputMessage(Level.Error, "INTERNAL ERROR", indentationLevel);
-                    OutputMessage(Level.Error, string.Empty, indentationLevel);
-                    OutputMessage(Level.Error, error.ToString(), indentationLevel);
-                    OutputMessage(Level.Error, string.Empty, indentationLevel);
-                    OutputMessage(Level.Error, "Please send bug report to nant-developers@lists.sourceforge.net.", indentationLevel);
+                    OutputMessage(e.Project, Level.Error, "INTERNAL ERROR", indentationLevel);
+                    OutputMessage(e.Project, Level.Error, string.Empty, indentationLevel);
+                    OutputMessage(e.Project, Level.Error, error.ToString(), indentationLevel);
+                    OutputMessage(e.Project, Level.Error, string.Empty, indentationLevel);
+                    OutputMessage(e.Project, Level.Error, "Please send bug report to nant-developers@lists.sourceforge.net.", indentationLevel);
                 }
 
-                OutputMessage(Level.Error, string.Empty, indentationLevel);
+                OutputMessage(e.Project, Level.Error, string.Empty, indentationLevel);
             }
 
             // output total build time
             TimeSpan buildTime = DateTime.Now - report.StartTime;
-            OutputMessage(Level.Info, string.Format(CultureInfo.InvariantCulture, 
+            OutputMessage(e.Project, Level.Info, string.Format(CultureInfo.InvariantCulture,
                 ResourceUtils.GetString("String_TotalTime") + Environment.NewLine, 
                 Math.Round(buildTime.TotalSeconds, 1)), indentationLevel);
 
@@ -557,12 +557,12 @@ namespace NAnt.Core {
             }
 
             if (e.Target != null) {
-                OutputMessage(Level.Info, string.Empty, indentationLevel);
-                OutputMessage(
+                OutputMessage(e.Project, Level.Info, string.Empty, indentationLevel);
+                OutputMessage(e.Project,
                     Level.Info, 
                     string.Format(CultureInfo.InvariantCulture, "{0}:", e.Target.Name), 
                     indentationLevel);
-                OutputMessage(Level.Info, string.Empty, indentationLevel);
+                OutputMessage(e.Project, Level.Info, string.Empty, indentationLevel);
             }
         }
 
@@ -644,8 +644,8 @@ namespace NAnt.Core {
         /// <param name="messageLevel">The priority of the message to output.</param>
         /// <param name="message">The message to output.</param>
         /// <param name="indentationLength">The number of characters that the message should be indented.</param>
-        private void OutputMessage(Level messageLevel, string message, int indentationLength) {
-            OutputMessage(CreateBuildEvent(messageLevel, message), indentationLength);
+        private void OutputMessage(Project project, Level messageLevel, string message, int indentationLength) {
+            OutputMessage(CreateBuildEvent(project, messageLevel, message), indentationLength);
         }
 
         /// <summary>
@@ -671,8 +671,10 @@ namespace NAnt.Core {
         /// </summary>
         /// <param name="e">The event to output.</param>
         /// <param name="indentationLength">The number of characters that the message should be indented.</param>
-        private void OutputMessage(BuildEventArgs e, int indentationLength) {
-            if (e.MessageLevel >= Threshold) {
+        private void OutputMessage(BuildEventArgs e, int indentationLength)
+        {
+            if (e.MessageLevel >= Threshold)
+            {
                 string txt = e.Message;
 
                 // beautify the message a bit
@@ -693,15 +695,17 @@ namespace NAnt.Core {
                     label = new String(' ', indentationLength) + label;
                 }
 
+                if (e.Project != null)
+                    label = e.Project.ThreadLabel + label;
+
+                StringBuilder sb = new StringBuilder();
                 foreach (string line in lines) {
-                    StringBuilder sb = new StringBuilder();
+                    if (sb.Length > 0)
+                        sb.AppendLine();
                     sb.Append(label);
                     sb.Append(line);
 
                     string indentedMessage = sb.ToString();
-
-                    // output the message to the console
-                    Console.Out.WriteLine(indentedMessage);
 
                     // if an OutputWriter was set, write the message to it
                     if (OutputWriter != null) {
@@ -710,6 +714,11 @@ namespace NAnt.Core {
 
                     Log(indentedMessage);
                 }
+
+                lock (Project.Synchronize) {
+                    // output the message to the console
+                    Console.Out.WriteLine(sb.ToString());
+                }
             }
         }
 
@@ -717,8 +726,8 @@ namespace NAnt.Core {
 
         #region Private Static Methods
 
-        private static BuildEventArgs CreateBuildEvent(Level messageLevel, string message) {
-            BuildEventArgs buildEvent = new BuildEventArgs();
+        private static BuildEventArgs CreateBuildEvent(Project project, Level messageLevel, string message) {
+            BuildEventArgs buildEvent = new BuildEventArgs(project);
             buildEvent.MessageLevel = messageLevel;
             buildEvent.Message = message;
             return buildEvent;

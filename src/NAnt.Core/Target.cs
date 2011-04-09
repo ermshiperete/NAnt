@@ -39,6 +39,9 @@ namespace NAnt.Core {
         private string _unlessCondition;
         private StringCollection _dependencies = new StringCollection();
         private bool _executed;
+		private TargetCollection _parents = new TargetCollection();
+		/// <summary>Number of unprocessed direct children.</summary>
+		private int _useCount;
 
         #endregion Private Instance Fields
 
@@ -230,44 +233,101 @@ namespace NAnt.Core {
         /// <summary>
         /// Executes dependent targets first, then the target.
         /// </summary>
-        public void Execute() {
-            if (IfDefined && !UnlessDefined) {
-                try {
-                    Project.OnTargetStarted(this, new BuildEventArgs(this));
+        public void Execute()
+		{
+			if (IfDefined && !UnlessDefined)
+			{
+				try
+				{
+					Project.OnTargetStarted(this, new BuildEventArgs(this));
                 
-                    // select all the task nodes and execute them
-                    foreach (XmlNode childNode in XmlNode) {
-                        if (!(childNode.NodeType == XmlNodeType.Element)|| !childNode.NamespaceURI.Equals(NamespaceManager.LookupNamespace("nant"))) {
-                            continue;
-                        }
+					// select all the task nodes and execute them
+					foreach (XmlNode childNode in XmlNode)
+					{
+						if (!(childNode.NodeType == XmlNodeType.Element) || !childNode.NamespaceURI.Equals(NamespaceManager.LookupNamespace("nant")))
+						{
+							continue;
+						}
                         
-                        if (TypeFactory.TaskBuilders.Contains(childNode.Name)) {
-                            Task task = Project.CreateTask(childNode, this);
-                            if (task != null) {
-                                task.Execute();
-                            }
-                        } else if (TypeFactory.DataTypeBuilders.Contains(childNode.Name)) {
-                            DataTypeBase dataType = Project.CreateDataTypeBase(childNode);
-                            Project.Log(Level.Verbose, "Adding a {0} reference with id '{1}'.", 
+						if (TypeFactory.TaskBuilders.Contains(childNode.Name))
+						{
+							Task task = Project.CreateTask(childNode, this);
+							if (task != null)
+							{
+								task.Execute();
+							}
+						}
+						else
+						if (TypeFactory.DataTypeBuilders.Contains(childNode.Name))
+						{
+							DataTypeBase dataType = Project.CreateDataTypeBase(childNode);
+							Project.Log(Level.Verbose, "Adding a {0} reference with id '{1}'.", 
                                 childNode.Name, dataType.ID);
-                            if (!Project.DataTypeReferences.Contains(dataType.ID)) {
-                                Project.DataTypeReferences.Add(dataType.ID, dataType);
-                            } else {
-                                Project.DataTypeReferences[dataType.ID] = dataType; // overwrite with the new reference.
-                            }
-                        } else {
-                            throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
+							if (!Project.DataTypeReferences.Contains(dataType.ID))
+							{
+								Project.DataTypeReferences.Add(dataType.ID, dataType);
+							}
+							else
+							{
+								Project.DataTypeReferences [dataType.ID] = dataType; // overwrite with the new reference.
+							}
+						}
+						else
+						{
+							throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                                 ResourceUtils.GetString("NA1071"), 
                                 childNode.Name), Project.LocationMap.GetLocation(childNode));
-                        }
-                    }
-                } finally {
-                    _executed = true;
-                    Project.OnTargetFinished(this, new BuildEventArgs(this));
-                }
-            }
-        }
+						}
+					}
+				}
+				finally
+				{
+					_executed = true;
+					Project.OnTargetFinished(this, new BuildEventArgs(this));
+				}
+			}
+		}
 
+		public void AddParent(Target parent)
+		{
+			if (parent == null)
+				return;
+
+			foreach (Target p in _parents)
+			{
+				if (p == parent)
+				{
+					Log(Level.Debug, string.Format("Processing {0}", p.Name));
+					p.UseCount++;
+					return;
+				}
+			}
+
+			Log(Level.Debug, string.Format("Processing parent {0}", parent.Name));
+			_parents.Add(parent);
+			parent.UseCount++;
+		}
+
+		public int UseCount
+		{
+			get { return _useCount;}
+			set
+			{
+				Log(Level.Debug, string.Format("Setting UseCount for {0} to {1}", Name, value));
+				_useCount = value;
+			}
+		}
+
+		public void TargetProcessed()
+		{
+			Log(Level.Debug, string.Format("TargetProcessed(): start ({0})", Name));
+			foreach (Target parent in _parents)
+			{
+				Log(Level.Debug, string.Format("parent: {0} old UseCount: {1}", parent.Name, parent.UseCount));
+				parent.UseCount--;
+			}
+			Log(Level.Debug, string.Format("TargetProcessed(): end ({0})", Name));
+		}
         #endregion Public Instance Methods
     }
 }

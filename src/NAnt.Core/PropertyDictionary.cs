@@ -21,6 +21,7 @@
 
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Globalization;
 using System.Text;
@@ -38,10 +39,21 @@ namespace NAnt.Core {
         /// instance.
         /// </summary>
         /// <param name="project">The project for which the dictionary will hold properties.</param>
-        public PropertyDictionary(Project project){
-            _project = project;
-        }
+        public PropertyDictionary(Project project)
+		{
+			_project = project;
+		}
 
+		public PropertyDictionary(PropertyDictionary original)
+		{
+			_project = original._project;
+			_dynamicProperties = original._dynamicProperties;
+			_readOnlyProperties = original._readOnlyProperties;
+			foreach (DictionaryEntry entry in original)
+			{
+				Add((string)entry.Key, (string)entry.Value);
+			}
+		}
         #endregion Public Instance Constructors
 
         #region Public Instance Properties
@@ -563,13 +575,13 @@ namespace NAnt.Core {
         /// <summary>
         /// Maintains a list of the property names that are readonly.
         /// </summary>
-        private StringCollection _readOnlyProperties = new StringCollection();
+        private List<string> _readOnlyProperties = new List<string>();
 
         /// <summary>
         /// Maintains a list of the property names of which the value is expanded
         /// on usage, not at initalization.
         /// </summary>
-        private StringCollection _dynamicProperties = new StringCollection();
+        private List<string> _dynamicProperties = new List<string>();
 
         /// <summary>
         /// The project for which the dictionary holds properties.
