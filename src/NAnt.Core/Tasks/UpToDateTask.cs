@@ -97,23 +97,29 @@ namespace NAnt.Core.Tasks {
 
         #region Override implementation of Task
 
-        protected override void ExecuteTask() {
-            bool value = true;
-            
-            FileInfo primaryFile = _targetFiles.MostRecentLastWriteTimeFile;
-            if (primaryFile == null || !primaryFile.Exists) {
-                value = false;
-                Log(Level.Verbose, "Destination file(s) do(es) not exist.");
-            } else {
-                string newerFile = FileSet.FindMoreRecentLastWriteTime(_sourceFiles.FileNames, primaryFile.LastWriteTime);
-                bool needsAnUpdate = (newerFile != null);
-                if (needsAnUpdate) {
-                    value = false;
-                    Log(Level.Verbose, "{0} is newer than {1}.", newerFile, primaryFile.Name);
-                }
-            }
-            Project.Properties[PropertyName] = Convert.ToString(value, CultureInfo.InvariantCulture);
-        }
+        protected override void ExecuteTask()
+		{
+			bool value = true;
+			
+			FileInfo primaryFile = _targetFiles.MostRecentLastWriteTimeFile;
+			if (primaryFile == null || !primaryFile.Exists)
+			{
+				value = false;
+				Log(Level.Verbose, "Destination file(s) do(es) not exist.");
+			}
+			else
+			{
+				string newerFile = FileSet.FindMoreRecentLastWriteTime(_sourceFiles.FileNames, primaryFile.LastWriteTime);
+				bool needsAnUpdate = (newerFile != null);
+				if (needsAnUpdate)
+				{
+					value = false;
+					Log(Level.Verbose, "{0} is newer than {1}.", newerFile, primaryFile.Name);
+				}
+			}
+			using (Project.Properties.WriterLock)
+				Project.Properties [PropertyName] = Convert.ToString(value, CultureInfo.InvariantCulture);
+		}
 
         #endregion Override implementation of Task
     }

@@ -90,47 +90,57 @@ namespace NAnt.Core {
         /// <returns>
         /// The value of the specified property.
         /// </returns>
-        [Function("get-value")]
-        public string GetPropertyValue(string propertyName) {
-            if (_properties.IsDynamicProperty(propertyName)) {
-                string currentState = (string)_state[propertyName];
+		[Function("get-value")]
+		public string GetPropertyValue(string propertyName)
+		{
+			using (_properties.ReaderLock)
+			{
+				if (_properties.IsDynamicProperty(propertyName))
+				{
+					string currentState = (string)_state [propertyName];
 
-                // check for circular references
-                if (currentState == PropertyDictionary.Visiting) {
-                    // Currently visiting this node, so have a cycle
-                    throw PropertyDictionary.CreateCircularException(propertyName, _visiting);
-                }
+					// check for circular references
+					if (currentState == PropertyDictionary.Visiting)
+					{
+						// Currently visiting this node, so have a cycle
+						throw PropertyDictionary.CreateCircularException(propertyName, _visiting);
+					}
 
-                _visiting.Push(propertyName);
-                _state[propertyName] = PropertyDictionary.Visiting;
+					_visiting.Push(propertyName);
+					_state [propertyName] = PropertyDictionary.Visiting;
 
-                string propertyValue = _properties.GetPropertyValue(propertyName);
-                if (propertyValue == null) {
-                    throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
-                        ResourceUtils.GetString("NA1053"), propertyName));
-                }
+					string propertyValue = _properties.GetPropertyValue(propertyName);
+					if (propertyValue == null)
+					{
+						throw new BuildException(string.Format(CultureInfo.InvariantCulture,
+							ResourceUtils.GetString("NA1053"), propertyName));
+					}
 
-                Location propertyLocation = Location.UnknownLocation;
+					Location propertyLocation = Location.UnknownLocation;
 
-                // TODO - get the proper location of the property declaration
-                
-                propertyValue = _properties.ExpandProperties(propertyValue, 
-                    propertyLocation, _state, _visiting);
+					// TODO - get the proper location of the property declaration
 
-                _visiting.Pop();
-                _state[propertyName] = PropertyDictionary.Visited;
-                return propertyValue;
-            } else {
-                string propertyValue = _properties.GetPropertyValue(propertyName);
-                if (propertyValue == null) {
-                    throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
-                        ResourceUtils.GetString("NA1053"), propertyName));
-                }
+					propertyValue = _properties.ExpandProperties(propertyValue,
+						propertyLocation, _state, _visiting);
 
-                return propertyValue;
-            }
-        }
+					_visiting.Pop();
+					_state [propertyName] = PropertyDictionary.Visited;
+					return propertyValue;
+				}
+				else
+				{
+					string propertyValue = _properties.GetPropertyValue(propertyName);
+					if (propertyValue == null)
+					{
+						throw new BuildException(string.Format(CultureInfo.InvariantCulture,
+							ResourceUtils.GetString("NA1053"), propertyName));
+					}
+
+					return propertyValue;
+				}
+			}
+		}
 
         #endregion Public Instance Methods
-    }
+	}
 }

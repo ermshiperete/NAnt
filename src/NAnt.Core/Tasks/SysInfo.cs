@@ -169,49 +169,66 @@ namespace NAnt.Core.Tasks {
 
         #region Override implementation of Task
 
-        protected override void ExecuteTask() {
-            Log(Level.Info, "Setting system information properties under " + Prefix + "*");
+        protected override void ExecuteTask()
+		{
+			Log(Level.Info, "Setting system information properties under " + Prefix + "*");
 
-            // set properties
-            Properties[Prefix + "clr.version"] = Environment.Version.ToString();
-            Properties[Prefix + "os.platform"] = Environment.OSVersion.Platform.ToString(CultureInfo.InvariantCulture);
-            Properties[Prefix + "os.version"]  = Environment.OSVersion.Version.ToString();
-            Properties[Prefix + "os.folder.applicationdata"] = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);  
-            Properties[Prefix + "os.folder.commonapplicationData"] = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);  
-            Properties[Prefix + "os.folder.commonprogramFiles"] = Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles);  
-            Properties[Prefix + "os.folder.desktopdirectory"] = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);                          
-            Properties[Prefix + "os.folder.programfiles"] = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);                        
-            Properties[Prefix + "os.folder.system"] = Environment.GetFolderPath(Environment.SpecialFolder.System);                                   
-            Properties[Prefix + "os.folder.temp"] = Path.GetTempPath();
-            Properties[Prefix + "os"] = Environment.OSVersion.ToString();
+			using (Properties.WriterLock)
+			{
+				// set properties
+				Properties [Prefix + "clr.version"] = Environment.Version.ToString();
+				Properties [Prefix + "os.platform"] = Environment.OSVersion.Platform.ToString(CultureInfo.InvariantCulture);
+				Properties [Prefix + "os.version"] = Environment.OSVersion.Version.ToString();
+				Properties [Prefix + "os.folder.applicationdata"] = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);  
+				Properties [Prefix + "os.folder.commonapplicationData"] = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);  
+				Properties [Prefix + "os.folder.commonprogramFiles"] = Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles);  
+				Properties [Prefix + "os.folder.desktopdirectory"] = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);                          
+				Properties [Prefix + "os.folder.programfiles"] = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);                        
+				Properties [Prefix + "os.folder.system"] = Environment.GetFolderPath(Environment.SpecialFolder.System);                                   
+				Properties [Prefix + "os.folder.temp"] = Path.GetTempPath();
+				Properties [Prefix + "os"] = Environment.OSVersion.ToString();
 
-            // set environment variables
-            IDictionary variables = Environment.GetEnvironmentVariables();
-            foreach (string name in variables.Keys) {
-                try {
-                    Properties[Prefix + "env." + name] = (string) variables[name];
-                } catch (Exception ex) {
-                    if (!FailOnError) {
-                        Log(Level.Warning, "Property could not be created for"
-                            + " environment variable '{0}' : {1}", name, 
+				// set environment variables
+				IDictionary variables = Environment.GetEnvironmentVariables();
+				foreach (string name in variables.Keys)
+				{
+					try
+					{
+						Properties [Prefix + "env." + name] = (string)variables [name];
+					}
+					catch (Exception ex)
+					{
+						if (!FailOnError)
+						{
+							Log(Level.Warning, "Property could not be created for"
+ + " environment variable '{0}' : {1}", name, 
                             ex.Message);
-                    } else {
-                        throw;
-                    }
-                }
-            }
+						}
+						else
+						{
+							throw;
+						}
+					}
+				}
+			}
 
-            // display the properties
-            if (Verbose) {
-                foreach (DictionaryEntry entry in Properties) {
-                    string name = (string) entry.Key;
-                    if (name.StartsWith(Prefix)) {
-                        Log(Level.Info, name + " = " + entry.Value.ToString());
-                    }
-                }
-            }
-        }
+			// display the properties
+			if (Verbose)
+			{
+				using (Properties.ReaderLock)
+				{
+					foreach (DictionaryEntry entry in Properties)
+					{
+						string name = (string)entry.Key;
+						if (name.StartsWith(Prefix))
+						{
+							Log(Level.Info, name + " = " + entry.Value.ToString());
+						}
+					}
+				}
+			}
+		}
 
         #endregion Override implementation of Task
-    }
+	}
 }

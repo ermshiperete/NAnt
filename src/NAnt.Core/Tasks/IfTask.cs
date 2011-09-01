@@ -292,67 +292,88 @@ namespace NAnt.Core.Tasks {
 
         #region Protected Instance Properties
 
-        protected virtual bool ConditionsTrue {
-            get {
-                bool ret = true;
+        protected virtual bool ConditionsTrue
+		{
+			get
+			{
+				bool ret = true;
 
-                if (Test != null) {
-                    if (!Convert.ToBoolean(Test, CultureInfo.InvariantCulture)) {
-                        return false;
-                    }
-                }
+				if (Test != null)
+				{
+					if (!Convert.ToBoolean(Test, CultureInfo.InvariantCulture))
+					{
+						return false;
+					}
+				}
 
-                // check if target exists
-                if (TargetNameExists != null) {
-                    ret = ret && (Project.Targets.Find(TargetNameExists) != null);
-                    if (!ret) {
-                        return false;
-                    }
-                }
+				// check if target exists
+				if (TargetNameExists != null)
+				{
+					ret = ret && (Project.Targets.Find(TargetNameExists) != null);
+					if (!ret)
+					{
+						return false;
+					}
+				}
 
-                // check if property exists
-                if (PropertyNameExists != null) {
-                    ret = ret && Properties.Contains(PropertyNameExists);
-                    if (!ret) {
-                        return false;
-                    }
-                }
+				// check if property exists
+				if (PropertyNameExists != null)
+				{
+					using (Properties.ReaderLock)
+						ret = ret && Properties.Contains(PropertyNameExists);
+					if (!ret)
+					{
+						return false;
+					}
+				}
 
-                // check if value of property is boolean true
-                if (PropertyNameTrue != null) {
-                    try {
-                        ret = ret && bool.Parse(Properties[PropertyNameTrue]);
-                        if (!ret) {
-                            return false;
-                        }
-                    } catch (Exception ex) {
-                        throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
+				// check if value of property is boolean true
+				if (PropertyNameTrue != null)
+				{
+					try
+					{
+						using (Properties.ReaderLock)
+							ret = ret && bool.Parse(Properties [PropertyNameTrue]);
+						if (!ret)
+						{
+							return false;
+						}
+					}
+					catch (Exception ex)
+					{
+						throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                             ResourceUtils.GetString("NA1126"), PropertyNameTrue), Location, ex);
-                    }
-                }
+					}
+				}
 
-                // check if file is up-to-date
-                if (UpToDateFiles != null) {
-                    FileInfo primaryFile = UpToDateFiles.MostRecentLastWriteTimeFile;
-                    if (primaryFile == null || !primaryFile.Exists) {
-                        ret = false;
-                        Log(Level.Verbose, "Uptodatefile(s) do(es) not exist.");
-                    } else {
-                        string newerFile = FileSet.FindMoreRecentLastWriteTime(_compareFiles.FileNames, primaryFile.LastWriteTime);
-                        bool needsAnUpdate = (newerFile != null);
-                        if (needsAnUpdate) {
-                            Log(Level.Verbose, "{0} is newer than {1}.", newerFile, primaryFile.Name);
-                        }
-                        ret = ret && !needsAnUpdate;
-                    }
-                    if (!ret) {
-                        return false;
-                    }
-                }
+				// check if file is up-to-date
+				if (UpToDateFiles != null)
+				{
+					FileInfo primaryFile = UpToDateFiles.MostRecentLastWriteTimeFile;
+					if (primaryFile == null || !primaryFile.Exists)
+					{
+						ret = false;
+						Log(Level.Verbose, "Uptodatefile(s) do(es) not exist.");
+					}
+					else
+					{
+						string newerFile = FileSet.FindMoreRecentLastWriteTime(_compareFiles.FileNames, primaryFile.LastWriteTime);
+						bool needsAnUpdate = (newerFile != null);
+						if (needsAnUpdate)
+						{
+							Log(Level.Verbose, "{0} is newer than {1}.", newerFile, primaryFile.Name);
+						}
+						ret = ret && !needsAnUpdate;
+					}
+					if (!ret)
+					{
+						return false;
+					}
+				}
 
-                return ret;
-            }
-        }
+				return ret;
+			}
+		}
 
         #endregion Protected Instance Properties
 

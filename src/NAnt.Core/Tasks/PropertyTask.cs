@@ -159,91 +159,124 @@ namespace NAnt.Core.Tasks {
 
         #region Override implementation of Task
 
-        protected override void ExecuteTask() {
-            string propertyValue;
+        protected override void ExecuteTask()
+		{
+			string propertyValue;
 
-            if (!Dynamic) {
-                propertyValue = Project.ExpandProperties(Value, Location);
-            } else {
-                propertyValue = Value;
-            }
+			if (!Dynamic)
+			{
+				propertyValue = Project.ExpandProperties(Value, Location);
+			}
+			else
+			{
+				propertyValue = Value;
+			}
 
-            // Special check for framework setting.
-            if (PropertyName == "nant.settings.currentframework") {
-                FrameworkInfo newTargetFramework = Project.Frameworks[propertyValue];
+			// Special check for framework setting.
+			if (PropertyName == "nant.settings.currentframework")
+			{
+				FrameworkInfo newTargetFramework = Project.Frameworks [propertyValue];
 
-                // check if target framework exists
-                if (newTargetFramework != null) {
-                    if (Project.TargetFramework != null) {
-                        if (Project.TargetFramework != newTargetFramework) {
-                            Project.TargetFramework = newTargetFramework;
-                            // only output message in build log if target 
-                            // framework is actually changed
-                            Log(Level.Info, "Target framework changed to \"{0}\".", 
+				// check if target framework exists
+				if (newTargetFramework != null)
+				{
+					if (Project.TargetFramework != null)
+					{
+						if (Project.TargetFramework != newTargetFramework)
+						{
+							Project.TargetFramework = newTargetFramework;
+							// only output message in build log if target 
+							// framework is actually changed
+							Log(Level.Info, "Target framework changed to \"{0}\".", 
                                 newTargetFramework.Description);
-                        }
-                    } else {
-                        Project.TargetFramework = newTargetFramework;
-                        Log(Level.Info, "Target framework set to \"{0}\".", 
+						}
+					}
+					else
+					{
+						Project.TargetFramework = newTargetFramework;
+						Log(Level.Info, "Target framework set to \"{0}\".", 
                             newTargetFramework.Description);
 
-                    }
-                    return;
-                } else {
-                    ArrayList validvalues = new ArrayList();
-                    foreach (FrameworkInfo framework in Project.Frameworks) {
-                        validvalues.Add(framework.Name);
-                    }
-                    string validvaluesare = string.Empty;
-                    if (validvalues.Count > 0) {
-                        validvaluesare = string.Format(CultureInfo.InvariantCulture, 
-                                                       ResourceUtils.GetString("String_ValidValues"), string.Join(", ", (string[]) validvalues.ToArray(typeof(string))));
-                    }
-                    throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
-                        ResourceUtils.GetString("NA1143"), 
-                        propertyValue, validvaluesare), Location);
-                }
-            }
+					}
+					return;
+				}
+				else
+				{
+					ArrayList validvalues = new ArrayList();
+					foreach (FrameworkInfo framework in Project.Frameworks)
+					{
+						validvalues.Add(framework.Name);
+					}
+					string validvaluesare = string.Empty;
+					if (validvalues.Count > 0)
+					{
+						validvaluesare = string.Format(CultureInfo.InvariantCulture, 
+							ResourceUtils.GetString("String_ValidValues"), string.Join(", ", (string[])validvalues.ToArray(typeof(string))));
+					}
+					throw new BuildException(string.Format(CultureInfo.InvariantCulture,
+						ResourceUtils.GetString("NA1143"),
+						propertyValue, validvaluesare), Location);
+				}
+			}
 
-            if (!Project.Properties.Contains(PropertyName)) {
-                if (ReadOnly) {
-                    Properties.AddReadOnly(PropertyName, propertyValue);
-                } else {
-                    Properties[PropertyName] = propertyValue;
-                }
+			using (var propLock = Project.Properties.ReaderLock)
+			{
+				if (!Project.Properties.Contains(PropertyName))
+				{
+					propLock.UpgradeToWriterLock();
+					if (ReadOnly)
+					{
+						Properties.AddReadOnly(PropertyName, propertyValue);
+					}
+					else
+					{
+						Properties [PropertyName] = propertyValue;
+					}
 
-                if (Dynamic) {
-                    Properties.MarkDynamic(PropertyName);
-                }
-            } else {
-                if (Overwrite) {
-                    if (Project.Properties.IsReadOnlyProperty(PropertyName)) {
-                        // for now, just output a warning when attempting to 
-                        // overwrite a readonly property
-                        //
-                        // we should actually be throwing a BuildException here, but
-                        // we currently don't have a good mechanism in place to allow
-                        // users to specify properties on the command line and provide
-                        // default values for these properties in the build file
-                        //
-                        // users could use either the "overwrite" property or a 
-                        // "property::exists(...)" unless condition on the <property> 
-                        // task, but these do not seem to be intuitive for users
-                        Log(Level.Warning, "Read-only property \"{0}\" cannot"
-                            + " be overwritten.", PropertyName);
-                    } else {
-                        Properties[PropertyName] = propertyValue;
+					if (Dynamic)
+					{
+						Properties.MarkDynamic(PropertyName);
+					}
+				}
+				else
+				{
+					if (Overwrite)
+					{
+						if (Project.Properties.IsReadOnlyProperty(PropertyName))
+						{
+							// for now, just output a warning when attempting to
+							// overwrite a readonly property
+							//
+							// we should actually be throwing a BuildException here, but
+							// we currently don't have a good mechanism in place to allow
+							// users to specify properties on the command line and provide
+							// default values for these properties in the build file
+							//
+							// users could use either the "overwrite" property or a
+							// "property::exists(...)" unless condition on the <property>
+							// task, but these do not seem to be intuitive for users
+							Log(Level.Warning, "Read-only property \"{0}\" cannot"
+								+ " be overwritten.", PropertyName);
+						}
+						else
+						{
+							propLock.UpgradeToWriterLock();
+							Properties [PropertyName] = propertyValue;
 
-                        if (Dynamic) {
-                            Properties.MarkDynamic(PropertyName);
-                        }
-                    }
-                } else {
-                    Log(Level.Verbose, "Property \"{0}\" already exists, and \"overwrite\" is set to false.", PropertyName);
-                }
-            }
-        }
+							if (Dynamic)
+							{
+								Properties.MarkDynamic(PropertyName);
+							}
+						}
+					}
+					else
+					{
+						Log(Level.Verbose, "Property \"{0}\" already exists, and \"overwrite\" is set to false.", PropertyName);
+					}
+				}
+			}
+		}
 
-        #endregion Override implementation of Task
-    }
+		#endregion Override implementation of Task
+	}
 }

@@ -240,7 +240,7 @@ namespace NAnt.Core {
 				try
 				{
 					Project.OnTargetStarted(this, new BuildEventArgs(this));
-                
+
 					// select all the task nodes and execute them
 					foreach (XmlNode childNode in XmlNode)
 					{
@@ -248,7 +248,7 @@ namespace NAnt.Core {
 						{
 							continue;
 						}
-                        
+
 						if (TypeFactory.TaskBuilders.Contains(childNode.Name))
 						{
 							Task task = Project.CreateTask(childNode, this);
@@ -262,7 +262,7 @@ namespace NAnt.Core {
 						{
 							DataTypeBase dataType = Project.CreateDataTypeBase(childNode);
 							Project.Log(Level.Verbose, "Adding a {0} reference with id '{1}'.", 
-                                childNode.Name, dataType.ID);
+								childNode.Name, dataType.ID);
 							if (!Project.DataTypeReferences.Contains(dataType.ID))
 							{
 								Project.DataTypeReferences.Add(dataType.ID, dataType);

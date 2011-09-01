@@ -49,286 +49,345 @@ namespace NAnt.Core {
         /// <returns>
         /// The exit code.
         /// </returns>
-        public static int Main(string[] args) {
-            CommandLineParser commandLineParser = null;
-            Project project = null;
-            Level projectThreshold = Level.Info;
+        public static int Main(string[] args)
+		{
+			CommandLineParser commandLineParser = null;
+			Project project = null;
+			Level projectThreshold = Level.Info;
             
-            // create assembly resolver
-            AssemblyResolver assemblyResolver = new AssemblyResolver();
+			// create assembly resolver
+			AssemblyResolver assemblyResolver = new AssemblyResolver();
             
-            // attach assembly resolver to the current domain
-            assemblyResolver.Attach();
+			// attach assembly resolver to the current domain
+			assemblyResolver.Attach();
 
-            try {
-                CommandLineOptions cmdlineOptions = new CommandLineOptions();
-                commandLineParser = new CommandLineParser(typeof(CommandLineOptions), true);
-                commandLineParser.Parse(args, cmdlineOptions);
+			try
+			{
+				CommandLineOptions cmdlineOptions = new CommandLineOptions();
+				commandLineParser = new CommandLineParser(typeof(CommandLineOptions), true);
+				commandLineParser.Parse(args, cmdlineOptions);
 
-                if (!cmdlineOptions.NoLogo) {
-                    Console.WriteLine(commandLineParser.LogoBanner);
-                    // insert empty line
-                    Console.WriteLine();
-                }
+				if (!cmdlineOptions.NoLogo)
+				{
+					Console.WriteLine(commandLineParser.LogoBanner);
+					// insert empty line
+					Console.WriteLine();
+				}
 
-                if (cmdlineOptions.ShowHelp) {
-                    ConsoleDriver.ShowHelp(commandLineParser);
-                    return 0;
-                }
+				if (cmdlineOptions.ShowHelp)
+				{
+					ConsoleDriver.ShowHelp(commandLineParser);
+					return 0;
+				}
 
-                // determine the project message threshold
-                if (cmdlineOptions.Debug) {
-                    projectThreshold = Level.Debug;
-                } else if (cmdlineOptions.Verbose) {
-                    projectThreshold = Level.Verbose;
-                } else if (cmdlineOptions.Quiet) {
-                    projectThreshold = Level.Warning;
-                }
+				// determine the project message threshold
+				if (cmdlineOptions.Debug)
+				{
+					projectThreshold = Level.Debug;
+				}
+				else
+				if (cmdlineOptions.Verbose)
+				{
+					projectThreshold = Level.Verbose;
+				}
+				else
+				if (cmdlineOptions.Quiet)
+				{
+					projectThreshold = Level.Warning;
+				}
 
-                if (cmdlineOptions.BuildFile != null) {
-                    if (project != null) {
-                        Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Buildfile has already been loaded! Using new value '{0}'; discarding old project file '{1}'", cmdlineOptions.BuildFile, project.BuildFileUri));
-                        // insert empty line
-                        Console.WriteLine();
-                    }
+				if (cmdlineOptions.BuildFile != null)
+				{
+					if (project != null)
+					{
+						Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Buildfile has already been loaded! Using new value '{0}'; discarding old project file '{1}'", cmdlineOptions.BuildFile, project.BuildFileUri));
+						// insert empty line
+						Console.WriteLine();
+					}
 
-                    project = new Project(cmdlineOptions.BuildFile, projectThreshold, cmdlineOptions.IndentationLevel);
-                }
+					project = new Project(cmdlineOptions.BuildFile, projectThreshold, cmdlineOptions.IndentationLevel);
+				}
 
-                // get build file name if the project has not been created.
-                // If a build file was not specified on the command line.
-                if (project == null) {
-                    project = new Project(GetBuildFileName(Environment.CurrentDirectory, null, cmdlineOptions.FindInParent), projectThreshold, cmdlineOptions.IndentationLevel);
-                }
+				// get build file name if the project has not been created.
+				// If a build file was not specified on the command line.
+				if (project == null)
+				{
+					project = new Project(GetBuildFileName(Environment.CurrentDirectory, null, cmdlineOptions.FindInParent), projectThreshold, cmdlineOptions.IndentationLevel);
+				}
 
-                // load extension asseemblies
-                LoadExtensionAssemblies(cmdlineOptions.ExtensionAssemblies, project);
+				// load extension asseemblies
+				LoadExtensionAssemblies(cmdlineOptions.ExtensionAssemblies, project);
 
-                PropertyDictionary buildOptionProps = new PropertyDictionary(project);
+				PropertyDictionary buildOptionProps = new PropertyDictionary(project);
 
-                // add build logger and build listeners to project
-                ConsoleDriver.AddBuildListeners(cmdlineOptions, project);
+				// add build logger and build listeners to project
+				ConsoleDriver.AddBuildListeners(cmdlineOptions, project);
     
-                // copy cmd line targets
-                foreach (string target in cmdlineOptions.Targets) {
-                    project.BuildTargets.Add(target);
-                }
+				// copy cmd line targets
+				foreach (string target in cmdlineOptions.Targets)
+				{
+					project.BuildTargets.Add(target);
+				}
 
-                // build collection of valid properties that were specified on 
-                // the command line.
-                foreach (string key in cmdlineOptions.Properties) {
-                    buildOptionProps.AddReadOnly(key, 
-                        cmdlineOptions.Properties.Get(key));
-                }
+				// build collection of valid properties that were specified on 
+				// the command line.
+				using (buildOptionProps.WriterLock)
+				{
+					foreach (string key in cmdlineOptions.Properties)
+					{
+						buildOptionProps.AddReadOnly(key, 
+							cmdlineOptions.Properties.Get(key));
+					}
+				}
 
-                // add valid properties to the project.
-                foreach (System.Collections.DictionaryEntry de in buildOptionProps) {
-                    project.Properties.AddReadOnly((string) de.Key, (string) de.Value);
-                }
+				using (buildOptionProps.ReaderLock)
+				using (project.Properties.WriterLock)
+				{
+					// add valid properties to the project.
+					foreach (System.Collections.DictionaryEntry de in buildOptionProps)
+					{
+						project.Properties.AddReadOnly((string)de.Key, (string)de.Value);
+					}
 
-                //add these here and in the project .ctor
-                Assembly ass = Assembly.GetExecutingAssembly();
+					//add these here and in the project .ctor
+					Assembly ass = Assembly.GetExecutingAssembly();
 
-                project.Properties.AddReadOnly(Project.NAntPropertyFileName, ass.Location);
-                project.Properties.AddReadOnly(Project.NAntPropertyVersion,  ass.GetName().Version.ToString());
-                project.Properties.AddReadOnly(Project.NAntPropertyLocation, Path.GetDirectoryName(ass.Location));
+					project.Properties.AddReadOnly(Project.NAntPropertyFileName, ass.Location);
+					project.Properties.AddReadOnly(Project.NAntPropertyVersion, ass.GetName().Version.ToString());
+					project.Properties.AddReadOnly(Project.NAntPropertyLocation, Path.GetDirectoryName(ass.Location));
+				}
 
-                if (cmdlineOptions.TargetFramework != null) {
-                    FrameworkInfo framework = project.Frameworks[cmdlineOptions.TargetFramework];
+				if (cmdlineOptions.TargetFramework != null)
+				{
+					FrameworkInfo framework = project.Frameworks [cmdlineOptions.TargetFramework];
 
-                    if (framework != null) {
-                        try {
-                            framework.Validate();
-                            project.TargetFramework = framework;
-                        } catch (Exception ex) {
-                            // write message of exception to console
-                            WriteException(ex);
-                            // output full stacktrace when NAnt is started in debug mode
-                            if (Level.Debug >= projectThreshold) {
-                                // insert empty line
-                                Console.Error.WriteLine();
-                                // output header
-                                Console.Error.WriteLine("Stacktrace:");
-                                // insert empty line
-                                Console.Error.WriteLine();
-                                // output full stacktrace
-                                Console.Error.WriteLine(ex.ToString());
-                            }
-                            // signal error
-                            return 1;
-                        }
-                    } else {
-                        Console.Error.WriteLine("Invalid framework '{0}' specified.", 
-                            cmdlineOptions.TargetFramework);
+					if (framework != null)
+					{
+						try
+						{
+							framework.Validate();
+							project.TargetFramework = framework;
+						}
+						catch (Exception ex)
+						{
+							// write message of exception to console
+							WriteException(ex);
+							// output full stacktrace when NAnt is started in debug mode
+							if (Level.Debug >= projectThreshold)
+							{
+								// insert empty line
+								Console.Error.WriteLine();
+								// output header
+								Console.Error.WriteLine("Stacktrace:");
+								// insert empty line
+								Console.Error.WriteLine();
+								// output full stacktrace
+								Console.Error.WriteLine(ex.ToString());
+							}
+							// signal error
+							return 1;
+						}
+					}
+					else
+					{
+						Console.Error.WriteLine("Invalid framework '{0}' specified.",
+							cmdlineOptions.TargetFramework);
 
-                        // insert empty line
-                        Console.Error.WriteLine();
+						// insert empty line
+						Console.Error.WriteLine();
 
-                        FrameworkInfo[] installedFrameworks = project.GetFrameworks(
-                            FrameworkTypes.Installed);
+						FrameworkInfo[] installedFrameworks = project.GetFrameworks(
+							FrameworkTypes.Installed);
 
-                        if (installedFrameworks.Length == 0) {
-                            Console.Error.WriteLine("There are no supported frameworks available on your system.");
-                        } else {
-                            Console.Error.WriteLine("Possible values include:");
-                            // insert empty line
-                            Console.Error.WriteLine();
+						if (installedFrameworks.Length == 0)
+						{
+							Console.Error.WriteLine("There are no supported frameworks available on your system.");
+						}
+						else
+						{
+							Console.Error.WriteLine("Possible values include:");
+							// insert empty line
+							Console.Error.WriteLine();
 
-                            foreach (FrameworkInfo fi in installedFrameworks) {
-                                Console.Error.WriteLine("{0} ({1})",
-                                    fi.Name, fi.Description);
-                            }
-                        }
-                        // signal error
-                        return 1;
-                    }
-                }
+							foreach (FrameworkInfo fi in installedFrameworks)
+							{
+								Console.Error.WriteLine("{0} ({1})", fi.Name, fi.Description);
+							}
+						}
+						// signal error
+						return 1;
+					}
+				}
 
-                if (cmdlineOptions.ShowProjectHelp) {
-                    Console.WriteLine();
-                    ConsoleDriver.ShowProjectHelp(project.Document);
-                } else {
-                    if (!project.Run()) {
-                        return 1;
-                    }
-                }
-                // signal success
-                return 0;
-            } catch (CommandLineArgumentException ex) {
-                // Write logo banner to console if parser was created successfully
-                if (commandLineParser != null) {
-                    Console.WriteLine(commandLineParser.LogoBanner);
-                    // insert empty line
-                    Console.Error.WriteLine();
-                }
-                // write message of exception to console
-                WriteException(ex);
-                // output full stacktrace when NAnt is started in debug mode
-                if (Level.Debug >= projectThreshold) {
-                    // insert empty line
-                    Console.Error.WriteLine();
-                    // output header
-                    Console.Error.WriteLine("Stacktrace:");
-                    // insert empty line
-                    Console.Error.WriteLine();
-                    // output full stacktrace
-                    Console.Error.WriteLine(ex.ToString());
-                }
-                // insert empty line
-                Console.WriteLine();
-                // instruct users to check the usage instructions
-                Console.WriteLine("Try 'nant -help' for more information");
-                // signal error
-                return 1;
-            } catch (ApplicationException ex) {
-                // insert empty line
-                Console.Error.WriteLine();
-                // output build result
-                Console.Error.WriteLine("BUILD FAILED");
-                // insert empty line
-                Console.Error.WriteLine();
-                // write message of exception to console
-                WriteException(ex);
-                // output full stacktrace when NAnt is started in debug mode
-                if (Level.Debug >= projectThreshold) {
-                    // insert empty line
-                    Console.Error.WriteLine();
-                    // output header
-                    Console.Error.WriteLine("Stacktrace:");
-                    // insert empty line
-                    Console.Error.WriteLine();
-                    // output full stacktrace
-                    Console.Error.WriteLine(ex.ToString());
-                } else {
-                    // insert empty line
-                    Console.WriteLine(string.Empty);
-                    // output help text
-                    Console.WriteLine("For more information regarding the cause of the " +
+				if (cmdlineOptions.ShowProjectHelp)
+				{
+					Console.WriteLine();
+					ConsoleDriver.ShowProjectHelp(project.Document);
+				}
+				else
+				{
+					if (!project.Run())
+					{
+						return 1;
+					}
+				}
+				// signal success
+				return 0;
+			}
+			catch (CommandLineArgumentException ex)
+			{
+				// Write logo banner to console if parser was created successfully
+				if (commandLineParser != null)
+				{
+					Console.WriteLine(commandLineParser.LogoBanner);
+					// insert empty line
+					Console.Error.WriteLine();
+				}
+				// write message of exception to console
+				WriteException(ex);
+				// output full stacktrace when NAnt is started in debug mode
+				if (Level.Debug >= projectThreshold)
+				{
+					// insert empty line
+					Console.Error.WriteLine();
+					// output header
+					Console.Error.WriteLine("Stacktrace:");
+					// insert empty line
+					Console.Error.WriteLine();
+					// output full stacktrace
+					Console.Error.WriteLine(ex.ToString());
+				}
+				// insert empty line
+				Console.WriteLine();
+				// instruct users to check the usage instructions
+				Console.WriteLine("Try 'nant -help' for more information");
+				// signal error
+				return 1;
+			}
+			catch (ApplicationException ex)
+			{
+				// insert empty line
+				Console.Error.WriteLine();
+				// output build result
+				Console.Error.WriteLine("BUILD FAILED");
+				// insert empty line
+				Console.Error.WriteLine();
+				// write message of exception to console
+				WriteException(ex);
+				// output full stacktrace when NAnt is started in debug mode
+				if (Level.Debug >= projectThreshold)
+				{
+					// insert empty line
+					Console.Error.WriteLine();
+					// output header
+					Console.Error.WriteLine("Stacktrace:");
+					// insert empty line
+					Console.Error.WriteLine();
+					// output full stacktrace
+					Console.Error.WriteLine(ex.ToString());
+				}
+				else
+				{
+					// insert empty line
+					Console.WriteLine(string.Empty);
+					// output help text
+					Console.WriteLine("For more information regarding the cause of the " + 
                         "build failure, run the build again in debug mode.");
-                }
-                // insert empty line
-                Console.WriteLine();
-                // instruct users to check the usage instructions
-                Console.WriteLine("Try 'nant -help' for more information");
-                // signal error
-                return 1;
-            } catch (Exception ex) {
-                // insert empty line
-                Console.Error.WriteLine();
-                // all other exceptions should have been caught
-                Console.Error.WriteLine("INTERNAL ERROR");
-                // insert empty line
-                Console.Error.WriteLine();
-                // write message of exception to console
-                WriteException(ex);
-                // output full stacktrace when NAnt is started in verbose mode
-                if (Level.Verbose >= projectThreshold) {
-                    // insert empty line
-                    Console.Error.WriteLine();
-                    // output header
-                    Console.Error.WriteLine("Stacktrace:");
-                    // insert empty line
-                    Console.Error.WriteLine();
-                    // output full stacktrace
-                    Console.Error.WriteLine(ex.ToString());
-                } else {
-                    // insert xempty line
-                    Console.WriteLine();
-                    // output help text
-                    Console.WriteLine("For more information regarding the cause of the " +
+				}
+				// insert empty line
+				Console.WriteLine();
+				// instruct users to check the usage instructions
+				Console.WriteLine("Try 'nant -help' for more information");
+				// signal error
+				return 1;
+			}
+			catch (Exception ex)
+			{
+				// insert empty line
+				Console.Error.WriteLine();
+				// all other exceptions should have been caught
+				Console.Error.WriteLine("INTERNAL ERROR");
+				// insert empty line
+				Console.Error.WriteLine();
+				// write message of exception to console
+				WriteException(ex);
+				// output full stacktrace when NAnt is started in verbose mode
+				if (Level.Verbose >= projectThreshold)
+				{
+					// insert empty line
+					Console.Error.WriteLine();
+					// output header
+					Console.Error.WriteLine("Stacktrace:");
+					// insert empty line
+					Console.Error.WriteLine();
+					// output full stacktrace
+					Console.Error.WriteLine(ex.ToString());
+				}
+				else
+				{
+					// insert xempty line
+					Console.WriteLine();
+					// output help text
+					Console.WriteLine("For more information regarding the cause of the " + 
                         "build failure, run the build again in verbose mode.");
-                }
-                // insert empty line
-                Console.WriteLine();
-                // instruct users to report this problem
-                Console.WriteLine("Please send a bug report (including the version of NAnt you're using) to nant-developers@lists.sourceforge.net");
-                // signal fatal error
-                return 2;
-            } finally {
-                if (project != null) {
-                    project.DetachBuildListeners();
-                }
-                // detach assembly resolver from the current domain
-                assemblyResolver.Detach();
-            }
-        }
+				}
+				// insert empty line
+				Console.WriteLine();
+				// instruct users to report this problem
+				Console.WriteLine("Please send a bug report (including the version of NAnt you're using) to nant-developers@lists.sourceforge.net");
+				// signal fatal error
+				return 2;
+			}
+			finally
+			{
+				if (project != null)
+				{
+					project.DetachBuildListeners();
+				}
+				// detach assembly resolver from the current domain
+				assemblyResolver.Detach();
+			}
+		}
 
-        /// <summary>
-        /// Prints the projecthelp to the console.
-        /// </summary>
-        /// <param name="buildDoc">The build file to show help for.</param>
-        /// <remarks>
-        /// <paramref name="buildDoc" /> is loaded and transformed with 
-        /// <c>ProjectHelp.xslt</c>, which is an embedded resource.
-        /// </remarks>
-        public static void ShowProjectHelp(XmlDocument buildDoc) {
-            // load our transform file out of the embedded resources
-            Stream xsltStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
+		/// <summary>
+		/// Prints the projecthelp to the console.
+		/// </summary>
+		/// <param name="buildDoc">The build file to show help for.</param>
+		/// <remarks>
+		/// <paramref name="buildDoc" /> is loaded and transformed with 
+		/// <c>ProjectHelp.xslt</c>, which is an embedded resource.
+		/// </remarks>
+		public static
+			void ShowProjectHelp(XmlDocument buildDoc)
+		{
+			// load our transform file out of the embedded resources
+			Stream xsltStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
                 "NAnt.Core.Resources.ProjectHelp.xslt");
-            if (xsltStream == null) {
-                throw new Exception("Missing 'ProjectHelp.xslt' Resource Stream");
-            }
+			if (xsltStream == null)
+			{
+				throw new Exception("Missing 'ProjectHelp.xslt' Resource Stream");
+			}
 
-            XmlTextReader reader = new XmlTextReader(xsltStream, XmlNodeType.Document,null);
+			XmlTextReader reader = new XmlTextReader(xsltStream, XmlNodeType.Document,null);
 
-            //first load in an XmlDocument so we can set the appropriate nant-namespace
-            XmlDocument xsltDoc = new XmlDocument();
-            xsltDoc.Load(reader);
-            xsltDoc.DocumentElement.SetAttribute("xmlns:nant",buildDoc.DocumentElement.NamespaceURI);
+			//first load in an XmlDocument so we can set the appropriate nant-namespace
+			XmlDocument xsltDoc = new XmlDocument();
+			xsltDoc.Load(reader);
+			xsltDoc.DocumentElement.SetAttribute("xmlns:nant", buildDoc.DocumentElement.NamespaceURI);
 
-            XslTransform transform = new XslTransform();
-            transform.Load(xsltDoc);
+			XslTransform transform = new XslTransform();
+			transform.Load(xsltDoc);
 
-            StringBuilder sb = new StringBuilder();
-            StringWriter writer = new StringWriter(sb, CultureInfo.InvariantCulture);
-            XsltArgumentList arguments = new XsltArgumentList();
+			StringBuilder sb = new StringBuilder();
+			StringWriter writer = new StringWriter(sb, CultureInfo.InvariantCulture);
+			XsltArgumentList arguments = new XsltArgumentList();
 
-            // Do transformation
-            transform.Transform(buildDoc, arguments, writer);
+			// Do transformation
+			transform.Transform(buildDoc, arguments, writer);
 
-            // Write projecthelp to console
-            Console.WriteLine(sb.ToString());
-        }
+			// Write projecthelp to console
+			Console.WriteLine(sb.ToString());
+		}
 
         /// <summary>
         /// Gets the file name for the build file in the specified directory.

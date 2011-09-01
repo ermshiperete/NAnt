@@ -47,7 +47,7 @@ namespace NAnt.Core {
     /// </para>
     /// </remarks>
     [Serializable()]
-    public abstract class Element {
+    public abstract class Element: MarshalByRefObject {
         #region Private Instance Fields
 
         private Location _location = Location.UnknownLocation;

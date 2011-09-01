@@ -135,53 +135,71 @@ namespace NAnt.Win32.Tasks {
         /// <summary>
         /// read the specified registry value
         /// </summary>
-        protected override void ExecuteTask() {
-            object regKeyValue = null;
+        protected override void ExecuteTask()
+		{
+			object regKeyValue = null;
 
-            if (_regKey == null) {
-                throw new BuildException("Missing registry key!");
-            }
+			if (_regKey == null)
+			{
+				throw new BuildException("Missing registry key!");
+			}
 
-            RegistryKey mykey = null;
-            if (_propName != null) {
-                mykey = LookupRegKey(_regKey, _regHive);
-                regKeyValue = mykey.GetValue(_regKeyValueName);
-                if (regKeyValue != null) {
-                    string val = regKeyValue.ToString();
-                    Properties[_propName] = val;
-                } else {
-                    throw new BuildException(String.Format(CultureInfo.InvariantCulture, "Registry Value Not Found! - key='{0}';hive='{1}';", _regKey + "\\" + _regKeyValueName, _regHiveString));
-                }
-            } else if (_propName == null && _propPrefix != null) {
-                mykey = LookupRegKey(_regKey, _regHive);
-                foreach (string name in mykey.GetValueNames()) {
-                    Properties[_propPrefix + "." + name] = mykey.GetValue(name).ToString();
-                }
-            } else {
-                throw new BuildException("Missing both a property name and property prefix; atleast one if required!");
-            }
-        }
+			RegistryKey mykey = null;
+			if (_propName != null)
+			{
+				mykey = LookupRegKey(_regKey, _regHive);
+				regKeyValue = mykey.GetValue(_regKeyValueName);
+				if (regKeyValue != null)
+				{
+					string val = regKeyValue.ToString();
+					using (Properties.WriterLock)
+						Properties [_propName] = val;
+				}
+				else
+				{
+					throw new BuildException(String.Format(CultureInfo.InvariantCulture, "Registry Value Not Found! - key='{0}';hive='{1}';", _regKey + "\\" + _regKeyValueName, _regHiveString));
+				}
+			}
+			else
+			if (_propName == null && _propPrefix != null)
+			{
+				mykey = LookupRegKey(_regKey, _regHive);
+				using (Properties.WriterLock)
+				{
+					foreach (string name in mykey.GetValueNames())
+					{
+						Properties [_propPrefix + "." + name] = mykey.GetValue(name).ToString();
+					}
+				}
+			}
+			else
+			{
+				throw new BuildException("Missing both a property name and property prefix; atleast one if required!");
+			}
+		}
 
         #endregion Override implementation of Task
 
         #region Protected Instance Methods
 
-        /// <summary>
-        /// Returns the hive for a given key.
-        /// </summary>
-        /// <param name="key"></param>
-        /// <param name="registries"></param>
-        /// <returns>
-        /// The hive for a given key.
-        /// </returns>
-        protected RegistryKey LookupRegKey(string key, RegistryHive[] registries) {
+/// <summary>
+/// Returns the hive for a given key.
+/// </summary>
+/// <param name="key"></param>
+/// <param name="registries"></param>
+/// <returns>
+/// The hive for a given key.
+/// </returns>
+		protected
+			RegistryKey LookupRegKey(string key, RegistryHive[] registries) {
             foreach (RegistryHive hive in registries) {
                 Log(Level.Verbose, "Opening {0}:{1}.", hive.ToString(), key);
-                RegistryKey returnkey = GetHiveKey(hive).OpenSubKey(key, false);
-                if (returnkey != null) {
-                    return returnkey;
-                }
-            }
+			RegistryKey returnkey = GetHiveKey(hive).OpenSubKey(key, false);
+			if (returnkey != null)
+			{
+				return returnkey;
+			}
+		}
             throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                 "Registry Path Not Found! - key='{0}';hive='{1}';", key, 
                 registries.ToString()));

@@ -204,60 +204,71 @@ namespace NAnt.Core.Tasks {
             }
         }
 
-        private void RunBuild(FileInfo buildFile) {
-            Log(Level.Info, "{0} {1}", buildFile.FullName, DefaultTarget);
+        private void RunBuild(FileInfo buildFile)
+		{
+			Log(Level.Info, "{0} {1}", buildFile.FullName, DefaultTarget);
 
-            // create new project with same threshold as current project and 
-            // increased indentation level, and initialize it using the same
-            // configuration node
-            Project project = new Project(buildFile.FullName, Project);
+			// create new project with same threshold as current project and 
+			// increased indentation level, and initialize it using the same
+			// configuration node
+			Project project = new Project(buildFile.FullName, Project);
 
-            // have the new project inherit properties from the current project
-            if (InheritAll) {
-                StringCollection excludes = new StringCollection();
-                excludes.Add(Project.NAntPropertyFileName);
-                excludes.Add(Project.NAntPropertyLocation);
-                excludes.Add(Project.NAntPropertyOnSuccess);
-                excludes.Add(Project.NAntPropertyOnFailure);
-                excludes.Add(Project.NAntPropertyProjectBaseDir);
-                excludes.Add(Project.NAntPropertyProjectBuildFile);
-                excludes.Add(Project.NAntPropertyProjectDefault);
-                excludes.Add(Project.NAntPropertyProjectName);
-                excludes.Add(Project.NAntPropertyVersion);
-                project.Properties.Inherit(Properties, excludes);
-            }
+			// have the new project inherit properties from the current project
+			if (InheritAll)
+			{
+				StringCollection excludes = new StringCollection();
+				excludes.Add(Project.NAntPropertyFileName);
+				excludes.Add(Project.NAntPropertyLocation);
+				excludes.Add(Project.NAntPropertyOnSuccess);
+				excludes.Add(Project.NAntPropertyOnFailure);
+				excludes.Add(Project.NAntPropertyProjectBaseDir);
+				excludes.Add(Project.NAntPropertyProjectBuildFile);
+				excludes.Add(Project.NAntPropertyProjectDefault);
+				excludes.Add(Project.NAntPropertyProjectName);
+				excludes.Add(Project.NAntPropertyVersion);
+				using (project.Properties.WriterLock)
+				using (Properties.ReaderLock)
+					project.Properties.Inherit(Properties, excludes);
+			}
 
-            // add/overwrite properties
-            foreach (PropertyTask property in OverrideProperties) {
-                // expand properties in context of current project for non-dynamic
-                // properties
-                if (!property.Dynamic) {
-                    property.Value = Project.ExpandProperties(property.Value, Location);
-                }
-                property.Project = project;
-                property.Execute();
-            }
+			// add/overwrite properties
+			foreach (PropertyTask property in OverrideProperties)
+			{
+				// expand properties in context of current project for non-dynamic
+				// properties
+				if (!property.Dynamic)
+				{
+					property.Value = Project.ExpandProperties(property.Value, Location);
+				}
+				property.Project = project;
+				property.Execute();
+			}
 
-            if (InheritRefs) {
-                // pass datatypes thru to the child project
-                project.DataTypeReferences.Inherit(Project.DataTypeReferences);
-            }
+			if (InheritRefs)
+			{
+				// pass datatypes thru to the child project
+				project.DataTypeReferences.Inherit(Project.DataTypeReferences);
+			}
             
-            // handle multiple targets
-            if (DefaultTarget != null) {
-                foreach (string t in DefaultTarget.Split(' ')) {
-                    string target = t.Trim();
-                    if (target.Length > 0) {
-                        project.BuildTargets.Add(target);
-                    }
-                }
-            }
+			// handle multiple targets
+			if (DefaultTarget != null)
+			{
+				foreach (string t in DefaultTarget.Split(' '))
+				{
+					string target = t.Trim();
+					if (target.Length > 0)
+					{
+						project.BuildTargets.Add(target);
+					}
+				}
+			}
 
-            // run the given build
-            if (!project.Run()) {
-                throw new BuildException("Nested build failed.  Refer to build log for exact reason.");
-            }
-        }
+			// run the given build
+			if (!project.Run())
+			{
+				throw new BuildException("Nested build failed.  Refer to build log for exact reason.");
+			}
+		}
 
         #endregion Override implementation of Task
     }

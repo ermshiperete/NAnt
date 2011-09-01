@@ -1041,34 +1041,45 @@ namespace NAnt.Core {
         /// property is not present in <paramref name="properties" />.
         /// </returns>
         /// <exception cref="ArgumentNullException"><paramref name="required" /> is <see langword="true" />, and the specified property is not present and no default value has been given.</exception>
-        private string GetPropertyValue(PropertyDictionary properties, string name, string defaultValue, bool required) {
-            string propertyName = "MailLogger." + name;
-            string value = (string) properties[propertyName];
+        private string GetPropertyValue(PropertyDictionary properties, string name, string defaultValue, bool required)
+		{
+			using (properties.ReaderLock)
+			{
+				string propertyName = "MailLogger." + name;
+				string value = (string)properties [propertyName];
 
-            if (value == null) {
-                value = defaultValue;
-            }
+				if (value == null)
+				{
+					value = defaultValue;
+				}
 
-            if (required && value == null) {
-                throw new ArgumentNullException(string.Format(CultureInfo.InvariantCulture, "Missing required parameter {0}.", propertyName));
-            }
+				if (required && value == null)
+				{
+					throw new ArgumentNullException(string.Format(CultureInfo.InvariantCulture, "Missing required parameter {0}.", propertyName));
+				}
 
-            return value;
-        }
+				return value;
+			}
+		}
 
-        private bool IsSSLEnabled (PropertyDictionary properties) {
-            string enableSSL = GetPropertyValue(properties, "smtp.enablessl", null, false);
-            if (enableSSL != null) {
-                try {
-                    return bool.Parse (enableSSL);
-                } catch (FormatException) {
-                    throw new ArgumentException (string.Format (CultureInfo.InvariantCulture,
-                        "Invalid value '{0}' for MailLogger.smtp.enablessl property.",
+		private bool IsSSLEnabled(PropertyDictionary properties)
+		{
+			string enableSSL = GetPropertyValue(properties, "smtp.enablessl", null, false);
+			if (enableSSL != null)
+			{
+				try
+				{
+					return bool.Parse(enableSSL);
+				}
+				catch (FormatException)
+				{
+					throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, 
+                        "Invalid value '{0}' for MailLogger.smtp.enablessl property.", 
                         enableSSL));
-                }
-            }
-            return false;
-        }
+				}
+			}
+			return false;
+		}
 
         private void AttachFiles(MailMessage mail, Project project, string filesetID) {
             if (StringUtils.IsNullOrEmpty(filesetID)) {

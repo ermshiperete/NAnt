@@ -73,13 +73,16 @@ namespace Tests.NAnt.Core {
 
         #region Override implementation of Task
 
-        protected override void ExecuteTask() { 
-            Log(Level.Info, "OutputType is \"{0}\".", Type.ToString());
+        protected override void ExecuteTask()
+		{ 
+			Log(Level.Info, "OutputType is \"{0}\".", Type.ToString());
 
-            if (Uri != null) {
-                Properties.Add(ElementTest1Task.UriPropertyName, Uri.ToString());
-            }
-        }
+			if (Uri != null)
+			{
+				using (Properties.WriterLock)
+					Properties.Add(ElementTest1Task.UriPropertyName, Uri.ToString());
+			}
+		}
 
         #endregion Override implementation of Task
 

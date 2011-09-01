@@ -136,27 +136,33 @@ namespace NAnt.Core.Tasks {
 
         #region Override implementation of Task
 
-        protected override void ExecuteTask() {
-            // make sure file actually exists
-            if (!File.Exists) {
-                throw new BuildException(string.Format(CultureInfo.InstalledUICulture,
+        protected override void ExecuteTask()
+		{
+			// make sure file actually exists
+			if (!File.Exists)
+			{
+				throw new BuildException(string.Format(CultureInfo.InstalledUICulture, 
                     "File '{0}' does not exist.", File.FullName), Location);
-            }
+			}
 
-            string content = null;
+			string content = null;
 
-            try {
-                content = FileUtils.ReadFile(File.FullName, FilterChain,
+			try
+			{
+				content = FileUtils.ReadFile(File.FullName, FilterChain, 
                     Encoding);
-            } catch (IOException ex) {
-                throw new BuildException(string.Format(CultureInfo.InvariantCulture,
+			}
+			catch (IOException ex)
+			{
+				throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                     ResourceUtils.GetString("NA1129"), File.FullName),
                     Location, ex);
-            }
+			}
 
-            // add/update property
-            Properties[Property] = content;
-        }
+			// add/update property
+			using (Properties.WriterLock)
+				Properties [Property] = content;
+		}
 
         #endregion Override implementation of Task
     }

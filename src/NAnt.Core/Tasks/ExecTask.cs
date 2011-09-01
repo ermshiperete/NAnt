@@ -341,44 +341,62 @@ namespace NAnt.Core.Tasks {
         /// <summary>
         /// Executes the external program.
         /// </summary>
-        protected override void ExecuteTask() {
-            base.ExecuteTask();
-            if (ResultProperty != null) {
-                Properties[ResultProperty] = base.ExitCode.ToString(
-                    CultureInfo.InvariantCulture);
-            }
-            if (Spawn && ProcessIdProperty != null) {
-                Properties[ProcessIdProperty] = base.ProcessId.ToString(
-                    CultureInfo.InvariantCulture);
-            }
-        }
+        protected override void ExecuteTask()
+		{
+			base.ExecuteTask();
+			using (Properties.WriterLock)
+			{
+				if (ResultProperty != null)
+				{
+					Properties [ResultProperty] = base.ExitCode.ToString(
+						CultureInfo.InvariantCulture);
+				}
+				if (Spawn && ProcessIdProperty != null)
+				{
+					Properties [ProcessIdProperty] = base.ProcessId.ToString(
+						CultureInfo.InvariantCulture);
+				}
+			}
+		}
 
-        protected override void PrepareProcess(System.Diagnostics.Process process) {
-            base.PrepareProcess(process);
+		protected override
+			void PrepareProcess(System.Diagnostics.Process process)
+		{
+			base.PrepareProcess(process);
 
-            // set working directory specified by user
-            process.StartInfo.WorkingDirectory = WorkingDirectory.FullName;
+			// set working directory specified by user
+			process.StartInfo.WorkingDirectory = WorkingDirectory.FullName;
 
-            // set environment variables
-            foreach (Option option in EnvironmentSet.Options) {
-                if (option.IfDefined && !option.UnlessDefined) {
-                    if (option.Value == null) {
-                        process.StartInfo.EnvironmentVariables[option.OptionName] = "";
-                    } else {
-                        process.StartInfo.EnvironmentVariables[option.OptionName] = option.Value;
-                    }
-                }
-            }
-            foreach (EnvironmentVariable variable in EnvironmentSet.EnvironmentVariables) {
-                if (variable.IfDefined && !variable.UnlessDefined) {
-                    if (variable.Value == null) {
-                        process.StartInfo.EnvironmentVariables[variable.VariableName] = "";
-                    } else {
-                        process.StartInfo.EnvironmentVariables[variable.VariableName] = variable.Value;
-                    }
-                }
-            }
-        }
+			// set environment variables
+			foreach (Option option in EnvironmentSet.Options)
+			{
+				if (option.IfDefined && !option.UnlessDefined)
+				{
+					if (option.Value == null)
+					{
+						process.StartInfo.EnvironmentVariables [option.OptionName] = "";
+					}
+					else
+					{
+						process.StartInfo.EnvironmentVariables [option.OptionName] = option.Value;
+					}
+				}
+			}
+			foreach (EnvironmentVariable variable in EnvironmentSet.EnvironmentVariables)
+			{
+				if (variable.IfDefined && !variable.UnlessDefined)
+				{
+					if (variable.Value == null)
+					{
+						process.StartInfo.EnvironmentVariables [variable.VariableName] = "";
+					}
+					else
+					{
+						process.StartInfo.EnvironmentVariables [variable.VariableName] = variable.Value;
+					}
+				}
+			}
+		}
 
         #endregion Override implementation of ExternalProgramBase
     }

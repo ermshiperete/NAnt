@@ -147,27 +147,35 @@ namespace NAnt.Core.Tasks {
         /// <summary>
         /// Executes the XML peek task.
         /// </summary>
-        protected override void ExecuteTask() {
-            Log(Level.Verbose, "Peeking at '{0}' with XPath expression '{1}'.", 
-                XmlFile.FullName,  XPath);
+        protected override void ExecuteTask()
+		{
+			Log(Level.Verbose, "Peeking at '{0}' with XPath expression '{1}'.", 
+                XmlFile.FullName, XPath);
 
-            // ensure the specified xml file exists
-            if (!XmlFile.Exists) {
-                throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
+			// ensure the specified xml file exists
+			if (!XmlFile.Exists)
+			{
+				throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                                                        ResourceUtils.GetString("NA1154"), XmlFile.FullName), Location);
-            }
+			}
 
-            try {
-                XmlDocument document = LoadDocument(XmlFile.FullName);
-                Properties[Property] = GetNodeContents(XPath, document, NodeIndex);
-            } catch (BuildException ex) {
-                throw ex; // Just re-throw the build exceptions.
-            } catch (Exception ex) {
-                throw new BuildException(string.Format(CultureInfo.InvariantCulture,
+			try
+			{
+				XmlDocument document = LoadDocument(XmlFile.FullName);
+				using (Properties.WriterLock)
+					Properties [Property] = GetNodeContents(XPath, document, NodeIndex);
+			}
+			catch (BuildException ex)
+			{
+				throw ex; // Just re-throw the build exceptions.
+			}
+			catch (Exception ex)
+			{
+				throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                     ResourceUtils.GetString("NA1153"), XmlFile.FullName), 
                     Location, ex);
-            }
-        }
+			}
+		}
         
         #endregion Override implementation of Task
         

@@ -26,6 +26,7 @@ using System.Collections.Specialized;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using NAnt.Core.Util;
 
 namespace NAnt.Core {
@@ -42,65 +43,123 @@ namespace NAnt.Core {
         public PropertyDictionary(Project project)
 		{
 			_project = project;
+			_lock = new ReaderWriterLock();
 		}
 
 		public PropertyDictionary(PropertyDictionary original)
 		{
-			_project = original._project;
-			_dynamicProperties = original._dynamicProperties;
-			_readOnlyProperties = original._readOnlyProperties;
-			foreach (DictionaryEntry entry in original)
+			_lock = new ReaderWriterLock();
+			using (original.ReaderLock)
 			{
-				Add((string)entry.Key, (string)entry.Value);
+				_project = original._project;
+				_dynamicProperties = new List<string>();
+				_dynamicProperties.AddRange(original._dynamicProperties);
+				_readOnlyProperties = new List<string>();
+				_readOnlyProperties.AddRange(original._readOnlyProperties);
+				foreach (DictionaryEntry entry in original)
+				{
+					Add((string)entry.Key, (string)entry.Value);
+				}
 			}
 		}
-        #endregion Public Instance Constructors
+		#endregion Public Instance Constructors
 
-        #region Public Instance Properties
-        
-        /// <summary>
-        /// Indexer property. 
-        /// </summary>
-        public virtual string this[string name] {
-            get {
-                string value = (string) Dictionary[(object) name];
+		public class AutoLock: IDisposable
+		{
+			private ReaderWriterLock _lock;
+			private bool _IsWrite;
+			private const int TimeOut = 1000;
 
-                // check whether (built-in) property is deprecated
-                CheckDeprecation(name);
+			public AutoLock(ReaderWriterLock rwlock, bool fWrite)
+			{
+				_lock = rwlock;
+				_IsWrite = fWrite;
+				if (fWrite)
+					_lock.AcquireWriterLock(TimeOut);
+				else
+					_lock.AcquireReaderLock(TimeOut);
+			}
 
-                if (IsDynamicProperty(name)) {
-                    return ExpandProperties(value, Location.UnknownLocation);
-                } else {
-                    return value;
-                }
-            }
-            set {
-                Dictionary[name] = value;
-            }
-        }
+			public void UpgradeToWriterLock()
+			{
+				System.Diagnostics.Debug.Assert(!_IsWrite);
+				_lock.UpgradeToWriterLock(TimeOut);
+			}
 
-        /// <summary>
-        /// Gets the project for which the dictionary holds properties.
-        /// </summary>
-        /// <value>
-        /// The project for which the dictionary holds properties.
-        /// </value>
-        public Project Project {
-            get { return _project; }
-        }
+			public void Dispose()
+			{
+				if (_IsWrite)
+					_lock.ReleaseWriterLock();
+				else
+					_lock.ReleaseReaderLock();
+			}
+		}
 
-        #endregion Public Instance Properties
+		#region Public Instance Properties
+		public AutoLock ReaderLock
+		{
+			get { return new AutoLock(_lock, false); }
+		}
 
-        #region Override implementation of DictionaryBase
+		public AutoLock WriterLock
+		{
+			get { return new AutoLock(_lock, true); }
+		}
 
-        protected override void OnClear() {
-            _readOnlyProperties.Clear();
-            _dynamicProperties.Clear();
-        }
+		/// <summary>
+		/// Indexer property.
+		/// </summary>
+		public virtual string this [string name]
+		{
+			get
+			{
+				string value = (string)Dictionary [(object)name];
 
-        protected override void OnSet(object key, object oldValue, object newValue) {
-            // at this point we're sure the key is valid, as it has already
-            // been verified by OnValidate
+				// check whether (built-in) property is deprecated
+				CheckDeprecation(name);
+
+				if (IsDynamicProperty(name))
+				{
+					return ExpandProperties(value, Location.UnknownLocation);
+				}
+				else
+				{
+					return value;
+				}
+			}
+			set
+			{
+				Dictionary [name] = value;
+			}
+		}
+
+		/// <summary>
+		/// Gets the project for which the dictionary holds properties.
+		/// </summary>
+		/// <value>
+		/// The project for which the dictionary holds properties.
+		/// </value>
+		public Project Project
+		{
+			get
+			{
+				return _project;
+			}
+		}
+
+		#endregion Public Instance Properties
+
+		#region Override implementation of DictionaryBase
+
+		protected override void OnClear() {
+			_readOnlyProperties.Clear();
+			_dynamicProperties.Clear();
+		}
+
+		protected override void OnSet(object key, object oldValue, object newValue)
+		{
+			// at this point we're sure the key is valid, as it has already
+			// been verified by OnValidate
             string propertyName = (string) key;
 
             // do not allow value of read-only property to be overwritten
@@ -206,7 +265,7 @@ namespace NAnt.Core {
         /// <param name="name">The name of the property.</param>
         /// <param name="value">The value to assign to the property.</param>
         public virtual void Add(string name, string value) {
-            Dictionary.Add(name, value);
+			Dictionary.Add(name, value);
         }
 
         /// <summary>
@@ -238,47 +297,55 @@ namespace NAnt.Core {
         /// </summary>
         /// <param name="source">Property list to inherit.</param>
         /// <param name="excludes">The list of properties to exclude during inheritance.</param>
-        public virtual void Inherit(PropertyDictionary source, StringCollection excludes) {
-            foreach (DictionaryEntry entry in source.Dictionary) {
-                string propertyName = (string) entry.Key;
+        public virtual void Inherit(PropertyDictionary source, StringCollection excludes)
+		{
+			foreach (DictionaryEntry entry in source.Dictionary)
+			{
+				string propertyName = (string)entry.Key;
+				Console.WriteLine("{1}> Inheriting {0}", propertyName, System.Threading.Thread.CurrentThread.ManagedThreadId);
 
-                if (excludes != null && excludes.Contains(propertyName)) {
-                    continue;
-                }
+				if (excludes != null && excludes.Contains(propertyName))
+				{
+					continue;
+				}
 
-                // do not overwrite an existing read-only property
-                if (IsReadOnlyProperty(propertyName)) {
-                    continue;
-                }
+				// do not overwrite an existing read-only property
+				if (IsReadOnlyProperty(propertyName))
+				{
+					continue;
+				}
 
-                // add property to dictionary
-                ValidatePropertyName(propertyName, Location.UnknownLocation);
-                Dictionary[propertyName] = entry.Value;
+				// add property to dictionary
+				ValidatePropertyName(propertyName, Location.UnknownLocation);
+				Dictionary [propertyName] = entry.Value;
 
-                // if property is readonly, add to collection of readonly properties
-                if (source.IsReadOnlyProperty(propertyName)) {
-                    _readOnlyProperties.Add(propertyName);
-                }
+				// if property is readonly, add to collection of readonly properties
+				if (source.IsReadOnlyProperty(propertyName))
+				{
+					_readOnlyProperties.Add(propertyName);
+				}
 
-                // if property is dynamic, add to collection of dynamic properties
-                // if it was not already in that collection
-                if (source.IsDynamicProperty(propertyName) && !IsDynamicProperty(propertyName)) {
-                    _dynamicProperties.Add(propertyName);
-                }
-            }
-        }
+				// if property is dynamic, add to collection of dynamic properties
+				// if it was not already in that collection
+				if (source.IsDynamicProperty(propertyName) && !IsDynamicProperty(propertyName))
+				{
+					_dynamicProperties.Add(propertyName);
+				}
+			}
+		}
 
-        /// <summary>
-        /// Expands a <see cref="string" /> from known properties.
-        /// </summary>
-        /// <param name="input">The replacement tokens.</param>
-        /// <param name="location">The <see cref="Location" /> to pass through for any exceptions.</param>
-        /// <returns>The expanded and replaced string.</returns>
-        public string ExpandProperties(string input, Location location) {
-            Hashtable state = new Hashtable();
-            Stack visiting = new Stack();
-            return ExpandProperties(input, location, state, visiting);
-        }
+		/// <summary>
+		/// Expands a <see cref="string" /> from known properties.
+		/// </summary>
+		/// <param name="input">The replacement tokens.</param>
+		/// <param name="location">The <see cref="Location" /> to pass through for any exceptions.</param>
+		/// <returns>The expanded and replaced string.</returns>
+		public string ExpandProperties(string input, Location location)
+		{
+			Hashtable state = new Hashtable();
+			Stack visiting = new Stack();
+			return ExpandProperties(input, location, state, visiting);
+		}
 
         /// <summary>
         /// Determines whether a property already exists.
@@ -297,7 +364,7 @@ namespace NAnt.Core {
         /// </summary>
         /// <param name="name">The name of the property to remove.</param>
         public void Remove(string name) {
-            Dictionary.Remove(name);
+			Dictionary.Remove(name);
         }
 
         #endregion Public Instance Methods
@@ -587,6 +654,7 @@ namespace NAnt.Core {
         /// The project for which the dictionary holds properties.
         /// </summary>
         private readonly Project _project;
+		private readonly ReaderWriterLock _lock;
 
         #endregion Private Instance Fields
 

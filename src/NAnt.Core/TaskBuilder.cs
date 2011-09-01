@@ -107,33 +107,45 @@ namespace NAnt.Core {
         [ReflectionPermission(SecurityAction.Demand, Flags=ReflectionPermissionFlag.NoFlags)]
         public Task CreateTask()
 		{
-			if (TaskName == "nant" || TaskName == "nantex") // HACK
+			Task task;
+//			if (TaskName == "nant" || TaskName == "nantex") // HACK
+//			{
+//				lock (_sync)
+//				{
+//					Console.WriteLine("Creating {0} on new appdomain", TaskName);
+//					// create task in new AppDomain
+//					if (TaskAppDomain == null)
+//					{
+//						Console.WriteLine("new appdomain doesn't exist, creating one; base: {0}, name: {1}", 
+//							Path.GetDirectoryName(Assembly.Location), Assembly.GetName().Name);
+//						// Construct and initialize settings for a second AppDomain
+//						AppDomainSetup ads = new AppDomainSetup();
+//						ads.ApplicationBase = Path.GetDirectoryName(Assembly.Location);
+//						ads.DisallowBindingRedirects = false;
+//						ads.DisallowCodeDownload = true;
+//						ads.ConfigurationFile = 
+//							AppDomain.CurrentDomain.SetupInformation.ConfigurationFile;
+//						TaskAppDomain = AppDomain.CreateDomain(TaskName);
+//					}
+//				}
+//				var a = Assembly.Load(Assembly.GetName().Name);
+//				Console.WriteLine("Loaded assembly: {0}", a.FullName);
+//				Console.WriteLine("Trying to load class: {0}", ClassName);
+//				Type type = a.GetType(ClassName, true, false);
+//				Console.WriteLine("Got type: {0}", type.FullName);
+//				task = (Task)TaskAppDomain.CreateInstanceAndUnwrap(Assembly.GetName().Name, ClassName);
+//			}
+//			else
 			{
-				lock (_sync)
-				{
-					Console.WriteLine("Creating {0] on new appdomain", TaskName);
-					// create task in new AppDomain
-					if (TaskAppDomain == null)
-					{
-						Console.WriteLine("new appdomain doesn't exist, creating one");
-						// Construct and initialize settings for a second AppDomain
-						AppDomainSetup ads = new AppDomainSetup();
-						ads.ApplicationBase = Environment.CurrentDirectory;
-						ads.DisallowBindingRedirects = false;
-						ads.DisallowCodeDownload = true;
-						ads.ConfigurationFile = 
-							AppDomain.CurrentDomain.SetupInformation.ConfigurationFile;
-					}
-				}
+				task = (Task)Assembly.CreateInstance(
+				ClassName, 
+				true, 
+				BindingFlags.Public | BindingFlags.Instance, 
+				null, 
+				null, 
+				CultureInfo.InvariantCulture, 
+				null);
 			}
-			Task task = (Task)Assembly.CreateInstance(
-                ClassName, 
-                true, 
-                BindingFlags.Public | BindingFlags.Instance, 
-                null, 
-                null, 
-                CultureInfo.InvariantCulture, 
-                null);
 			IPluginConsumer pluginConsumer = task as IPluginConsumer;
 			if (pluginConsumer != null)
 			{

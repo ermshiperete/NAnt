@@ -144,37 +144,46 @@ namespace NAnt.Core.Tasks {
         /// <summary>
         /// Executes the task.
         /// </summary>
-        protected override void ExecuteTask() {
-            Regex regex = null;
+        protected override void ExecuteTask()
+		{
+			Regex regex = null;
 
-            try {
-                regex = new Regex(Pattern, Options);
-            } catch (ArgumentException ex) {
-                throw new BuildException(string.Format(CultureInfo.InvariantCulture,
+			try
+			{
+				regex = new Regex(Pattern, Options);
+			}
+			catch (ArgumentException ex)
+			{
+				throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                                                        ResourceUtils.GetString("NA1145"), Pattern),
                     Location, ex);
-            }
+			}
 
-            Match match = regex.Match(Input);
+			Match match = regex.Match(Input);
 
-            if (match == Match.Empty) {
-                throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
+			if (match == Match.Empty)
+			{
+				throw new BuildException(string.Format(CultureInfo.InvariantCulture, 
                     ResourceUtils.GetString("NA1144"), Pattern, 
                     Input), Location);
-            }
+			}
 
-            // we start the iteration at 1, since the collection of groups 
-            // always starts with a group which matches the entire input and 
-            // is named '0', this group is of no interest to us
-            for (int i = 1; i < match.Groups.Count; i++) {
-                string groupName = regex.GroupNameFromNumber(i);
+			// we start the iteration at 1, since the collection of groups
+			// always starts with a group which matches the entire input and
+			// is named '0', this group is of no interest to us
+			using (Properties.WriterLock)
+			{
+				for (int i = 1; i < match.Groups.Count; i++)
+				{
+					string groupName = regex.GroupNameFromNumber(i);
 
-                Log(Level.Verbose, "Setting property '{0}' to '{1}'.", 
-                    groupName, match.Groups[groupName].Value);
-                Properties[groupName] = match.Groups[groupName].Value;
-            }
-        }
+					Log(Level.Verbose, "Setting property '{0}' to '{1}'.", 
+					groupName, match.Groups [groupName].Value);
+					Properties [groupName] = match.Groups [groupName].Value;
+				}
+			}
+		}
 
         #endregion Override implementation of Task
-    }
+		}
 }
